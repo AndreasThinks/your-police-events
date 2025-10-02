@@ -21,7 +21,7 @@
         }
         
         .container {
-            max-width: 600px;
+            max-width: 700px;
             margin: 50px auto;
             background: white;
             padding: 40px;
@@ -43,6 +43,7 @@
         
         .input-group {
             margin-bottom: 20px;
+            position: relative;
         }
         
         label {
@@ -52,8 +53,13 @@
             color: #555;
         }
         
+        .input-wrapper {
+            display: flex;
+            gap: 10px;
+        }
+        
         input[type="text"] {
-            width: 100%;
+            flex: 1;
             padding: 12px;
             border: 2px solid #e0e0e0;
             border-radius: 5px;
@@ -64,6 +70,27 @@
         input[type="text"]:focus {
             outline: none;
             border-color: #667eea;
+        }
+        
+        .location-btn {
+            padding: 12px 20px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+            white-space: nowrap;
+        }
+        
+        .location-btn:hover {
+            background: #218838;
+        }
+        
+        .location-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
         }
         
         button {
@@ -106,6 +133,21 @@
             font-size: 20px;
         }
         
+        .event-count {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #28a745;
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        
+        .event-count.zero {
+            background: #6c757d;
+        }
+        
         .calendar-url {
             background: white;
             padding: 12px;
@@ -119,11 +161,62 @@
         
         .copy-btn {
             background: #28a745;
-            margin-bottom: 10px;
+            margin-bottom: 20px;
         }
         
         .copy-btn:hover {
             background: #218838;
+        }
+        
+        .events-preview {
+            margin-top: 20px;
+        }
+        
+        .events-preview h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .event-card {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 12px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .event-card h4 {
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+        
+        .event-date {
+            color: #667eea;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .event-location {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        
+        .event-description {
+            color: #555;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        
+        .no-events {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-style: italic;
         }
         
         .instructions {
@@ -181,20 +274,25 @@
         <form id="postcodeForm">
             <div class="input-group">
                 <label for="postcode">Enter Your Postcode</label>
-                <input 
-                    type="text" 
-                    id="postcode" 
-                    name="postcode" 
-                    placeholder="e.g., SW1A 1AA"
-                    required
-                >
+                <div class="input-wrapper">
+                    <input 
+                        type="text" 
+                        id="postcode" 
+                        name="postcode" 
+                        placeholder="e.g., SW1A 1AA"
+                        required
+                    >
+                    <button type="button" class="location-btn" id="locationBtn" title="Use my location">
+                        📍 Use Location
+                    </button>
+                </div>
             </div>
             
             <button type="submit" id="submitBtn">Find My Calendar</button>
         </form>
         
         <div class="loading" id="loading">
-            <p>🔍 Finding your neighbourhood...</p>
+            <p id="loadingMessage">🔍 Finding your neighbourhood...</p>
         </div>
         
         <div class="error" id="error"></div>
@@ -202,8 +300,15 @@
         <div class="result" id="result">
             <h2>✅ Your Calendar Feed</h2>
             <p><strong>Neighbourhood:</strong> <span id="neighbourhoodName"></span></p>
+            <span class="event-count" id="eventCount"></span>
+            
             <div class="calendar-url" id="calendarUrl"></div>
             <button class="copy-btn" onclick="copyToClipboard()">📋 Copy URL</button>
+            
+            <div class="events-preview" id="eventsPreview" style="display: none;">
+                <h3>📅 Upcoming Events</h3>
+                <div id="eventsList"></div>
+            </div>
             
             <div class="instructions">
                 <h3>How to Subscribe:</h3>
@@ -222,9 +327,53 @@
     <script>
         const form = document.getElementById('postcodeForm');
         const loading = document.getElementById('loading');
+        const loadingMessage = document.getElementById('loadingMessage');
         const error = document.getElementById('error');
         const result = document.getElementById('result');
         const submitBtn = document.getElementById('submitBtn');
+        const locationBtn = document.getElementById('locationBtn');
+        
+        // Geolocation feature
+        locationBtn.addEventListener('click', async () => {
+            if (!navigator.geolocation) {
+                error.textContent = 'Geolocation is not supported by your browser';
+                error.classList.add('show');
+                return;
+            }
+            
+            locationBtn.disabled = true;
+            locationBtn.textContent = '📍 Getting location...';
+            error.classList.remove('show');
+            
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    try {
+                        // For now, just show coordinates - in production you'd reverse geocode
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        
+                        // Simple message - in production, call reverse geocoding API
+                        error.textContent = `Location found: ${lat.toFixed(4)}, ${lng.toFixed(4)}. Please enter your postcode manually for now.`;
+                        error.style.background = '#d1ecf1';
+                        error.style.color = '#0c5460';
+                        error.classList.add('show');
+                        
+                    } catch (err) {
+                        error.textContent = 'Could not determine postcode from location';
+                        error.classList.add('show');
+                    } finally {
+                        locationBtn.disabled = false;
+                        locationBtn.textContent = '📍 Use Location';
+                    }
+                },
+                (err) => {
+                    error.textContent = 'Location access denied. Please enter postcode manually.';
+                    error.classList.add('show');
+                    locationBtn.disabled = false;
+                    locationBtn.textContent = '📍 Use Location';
+                }
+            );
+        });
         
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -233,11 +382,16 @@
             
             // Reset UI
             loading.classList.add('show');
+            loadingMessage.textContent = '🔍 Looking up postcode...';
             error.classList.remove('show');
             result.classList.remove('show');
             submitBtn.disabled = true;
             
             try {
+                setTimeout(() => {
+                    loadingMessage.textContent = '🔍 Finding your neighbourhood...';
+                }, 500);
+                
                 const response = await fetch('/lookup', {
                     method: 'POST',
                     headers: {
@@ -255,10 +409,57 @@
                 // Show result
                 document.getElementById('neighbourhoodName').textContent = data.neighbourhood_name;
                 document.getElementById('calendarUrl').textContent = data.calendar_url;
+                
+                // Show event count
+                const eventCountEl = document.getElementById('eventCount');
+                if (data.event_count > 0) {
+                    eventCountEl.textContent = `${data.event_count} upcoming event${data.event_count !== 1 ? 's' : ''}`;
+                    eventCountEl.classList.remove('zero');
+                } else {
+                    eventCountEl.textContent = 'No upcoming events';
+                    eventCountEl.classList.add('zero');
+                }
+                
+                // Show event preview
+                const eventsPreview = document.getElementById('eventsPreview');
+                const eventsList = document.getElementById('eventsList');
+                
+                if (data.preview_events && data.preview_events.length > 0) {
+                    eventsList.innerHTML = '';
+                    data.preview_events.forEach(event => {
+                        const eventCard = document.createElement('div');
+                        eventCard.className = 'event-card';
+                        
+                        const startDate = new Date(event.start_date);
+                        const dateStr = startDate.toLocaleDateString('en-GB', {
+                            weekday: 'short',
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                        
+                        eventCard.innerHTML = `
+                            <h4>${event.title}</h4>
+                            <div class="event-date">📅 ${dateStr}</div>
+                            <div class="event-location">📍 ${event.address}</div>
+                            ${event.description ? `<div class="event-description">${event.description}</div>` : ''}
+                        `;
+                        eventsList.appendChild(eventCard);
+                    });
+                    eventsPreview.style.display = 'block';
+                } else if (data.event_count === 0) {
+                    eventsList.innerHTML = '<div class="no-events">No upcoming events scheduled</div>';
+                    eventsPreview.style.display = 'block';
+                }
+                
                 result.classList.add('show');
                 
             } catch (err) {
                 error.textContent = err.message;
+                error.style.background = '#f8d7da';
+                error.style.color = '#721c24';
                 error.classList.add('show');
             } finally {
                 loading.classList.remove('show');

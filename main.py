@@ -148,11 +148,21 @@ class PostcodeLookupRequest(BaseModel):
     postcode: str
 
 
+class EventPreview(BaseModel):
+    title: str
+    start_date: str
+    end_date: str
+    address: str
+    description: str
+
+
 class PostcodeLookupResponse(BaseModel):
     force_id: str
     neighbourhood_id: str
     neighbourhood_name: str
     calendar_url: str
+    event_count: int
+    preview_events: list[EventPreview]
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -208,11 +218,46 @@ async def lookup_postcode(request: PostcodeLookupRequest, http_request: Request)
         base_url = str(http_request.base_url).rstrip('/')
         calendar_url = f"{base_url}/calendar/{force_id}/{neighbourhood_id}.ics"
         
+        # Fetch events for preview
+        try:
+            events = await police_client.get_neighbourhood_events(force_id, neighbourhood_id)
+            
+            # Get next 3 upcoming events
+            from datetime import datetime
+            now = datetime.now()
+            upcoming_events = []
+            
+            for event in events:
+                try:
+                    start_date = datetime.fromisoformat(event['start_date'].replace('Z', '+00:00'))
+                    if start_date >= now:
+                        upcoming_events.append(EventPreview(
+                            title=event.get('title', 'Untitled Event'),
+                            start_date=event.get('start_date', ''),
+                            end_date=event.get('end_date', ''),
+                            address=event.get('address', ''),
+                            description=event.get('description', '')
+                        ))
+                except (ValueError, KeyError):
+                    continue
+            
+            # Sort by start date and take first 3
+            upcoming_events.sort(key=lambda e: e.start_date)
+            preview_events = upcoming_events[:3]
+            event_count = len(upcoming_events)
+            
+        except Exception as e:
+            logger.warning(f"Could not fetch events for preview: {e}")
+            preview_events = []
+            event_count = 0
+        
         return PostcodeLookupResponse(
             force_id=force_id,
             neighbourhood_id=neighbourhood_id,
             neighbourhood_name=neighbourhood_name,
-            calendar_url=calendar_url
+            calendar_url=calendar_url,
+            event_count=event_count,
+            preview_events=preview_events
         )
         
     except HTTPException:
@@ -296,7 +341,7 @@ async def get_status():
 
 @app.post("/admin/sync")
 @limiter.limit("1/hour")
-async def trigger_sync(http_request: Request):
+async def trigger_sync(request: Request):
     """
     Manually trigger a neighbourhood sync (admin endpoint).
     Rate limited to 1 request per hour.
