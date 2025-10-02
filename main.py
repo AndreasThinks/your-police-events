@@ -1,8 +1,10 @@
 """Main FastAPI application for local police events calendar service."""
 import os
+import sys
+import json
 import logging
 from contextlib import asynccontextmanager
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
@@ -33,11 +35,43 @@ from utils.error_messages import (
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+
+# Structured JSON logging formatter for Railway
+class StructuredFormatter(logging.Formatter):
+    """
+    Custom formatter that outputs logs in JSON format for Railway.
+    Railway automatically parses JSON logs and provides better filtering.
+    """
+    
+    def format(self, record: logging.LogRecord) -> str:
+        """Format log record as JSON."""
+        log_data = {
+            "message": record.getMessage(),
+            "level": record.levelname.lower(),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "logger": record.name,
+        }
+        
+        # Add exception info if present
+        if record.exc_info:
+            log_data["exception"] = self.formatException(record.exc_info)
+        
+        # Add any extra fields from the log record
+        if hasattr(record, "extra_fields"):
+            log_data.update(record.extra_fields)
+        
+        return json.dumps(log_data)
+
+
+# Configure structured logging
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(StructuredFormatter())
+
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    handlers=[handler]
 )
+
 logger = logging.getLogger(__name__)
 
 # Global instances
