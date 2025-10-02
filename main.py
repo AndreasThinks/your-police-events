@@ -16,7 +16,7 @@ from cachetools import TTLCache
 from api.police_uk import PoliceUKClient
 from api.ordnance_survey import OrdnanceSurveyClient
 from database.duckdb_client import DuckDBClient
-from database.sync import run_sync, run_sync_async, sync_specific_forces
+from database.sync import run_sync, run_sync_async, run_sync_with_recovery
 from database.sync_strategy import determine_sync_strategy
 from services.location import LocationService
 from services.calendar import CalendarService
@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
     # Set up weekly sync scheduler
     scheduler = BackgroundScheduler()
     scheduler.add_job(
-        func=lambda: run_sync(db_client),
+        func=lambda: run_sync(db_path),
         trigger="interval",
         weeks=1,
         id="weekly_sync",
@@ -114,7 +114,7 @@ async def lifespan(app: FastAPI):
             from datetime import datetime, timedelta
             run_time = datetime.now() + timedelta(minutes=strategy.delay_minutes)
             scheduler.add_job(
-                func=lambda: run_sync(db_client),
+                func=lambda: run_sync(db_path),
                 trigger="date",
                 run_date=run_time,
                 id="startup_full_sync",
@@ -127,20 +127,11 @@ async def lifespan(app: FastAPI):
             from datetime import datetime, timedelta
             run_time = datetime.now() + timedelta(minutes=strategy.delay_minutes)
             
-            async def recovery_sync():
-                await sync_specific_forces(db_client, strategy.force_ids)
-            
-            def run_recovery():
-                import asyncio
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(recovery_sync())
-                finally:
-                    loop.close()
+            # Capture force_ids in closure
+            forces_to_recover = strategy.force_ids
             
             scheduler.add_job(
-                func=run_recovery,
+                func=lambda: run_sync_with_recovery(db_path, forces_to_recover),
                 trigger="date",
                 run_date=run_time,
                 id="startup_recovery_sync",

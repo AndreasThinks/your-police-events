@@ -440,17 +440,54 @@ async def run_sync_async(db_client: DuckDBClient):
     await sync_all_neighbourhoods(db_client)
 
 
-def run_sync(db_client: DuckDBClient):
+def run_sync(db_path: str):
     """
-    Run the sync operation (wrapper for use with APScheduler).
+    Run the sync operation in a subprocess (wrapper for use with APScheduler).
+    Thread-safe by creating a new database connection.
     
     Args:
-        db_client: Connected DuckDB client
+        db_path: Path to DuckDB database file
     """
     import asyncio
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    from database.duckdb_client import DuckDBClient
+    
+    # Create new connection in this process/thread
+    db_client = DuckDBClient(db_path)
+    db_client.connect()
+    
     try:
-        loop.run_until_complete(sync_all_neighbourhoods(db_client))
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(sync_all_neighbourhoods(db_client))
+        finally:
+            loop.close()
     finally:
-        loop.close()
+        db_client.close()
+
+
+def run_sync_with_recovery(db_path: str, force_ids: List[str]):
+    """
+    Run recovery sync for specific forces in a subprocess.
+    Thread-safe by creating a new database connection.
+    
+    Args:
+        db_path: Path to DuckDB database file
+        force_ids: List of force IDs to sync
+    """
+    import asyncio
+    from database.duckdb_client import DuckDBClient
+    
+    # Create new connection in this process/thread
+    db_client = DuckDBClient(db_path)
+    db_client.connect()
+    
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(sync_specific_forces(db_client, force_ids))
+        finally:
+            loop.close()
+    finally:
+        db_client.close()

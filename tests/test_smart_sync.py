@@ -39,18 +39,19 @@ def test_no_metadata_strategy(test_db):
 
 
 def test_stale_lock_detection(test_db):
-    """Test detection of stale sync lock (crashed mid-sync)."""
+    """Test detection of stale sync lock (crashed mid-sync with completion time)."""
     # Add neighbourhoods
     test_db.conn.execute("""
         INSERT INTO neighbourhoods (force_id, neighbourhood_id, name, boundary)
         VALUES ('test', 'test1', 'Test Area', ST_GeomFromText('POINT(0 0)'))
     """)
     
-    # Create stale lock (3 hours old)
+    # Create stale lock (3 hours old) WITH completion time (so incomplete check doesn't trigger)
     stale_time = datetime.now() - timedelta(hours=3)
     test_db.save_sync_metadata({
         'last_sync_started': stale_time,
-        'sync_status': 'running',
+        'last_sync_completed': stale_time + timedelta(minutes=30),  # Has completion time
+        'sync_status': 'running',  # But status still says running (stale lock)
         'total_forces': 44,
         'forces_synced': 10,
         'forces_failed': 0,
@@ -294,3 +295,74 @@ def test_failed_forces_retrieval(test_db):
     assert 'sussex' in failed
     assert 'devon-and-cornwall' in failed
     assert 'metropolitan' not in failed
+
+
+def test_incomplete_sync_detection(test_db):
+    """Test detection of incomplete sync (started but never completed)."""
+    # Add neighbourhoods
+    test_db.conn.execute("""
+        INSERT INTO neighbourhoods (force_id, neighbourhood_id, name, boundary)
+        VALUES ('test', 'test1', 'Test Area', ST_GeomFromText('POINT(0 0)'))
+    """)
+    
+    # Create metadata with start time but no completion time (crash scenario)
+    test_db.save_sync_metadata({
+        'last_sync_started': datetime.now() - timedelta(hours=1),
+        'last_sync_completed': None,  # Never completed!
+        'sync_status': 'running',
+        'total_forces': 44,
+        'forces_synced': 10,
+        'forces_failed': 0,
+        'total_neighbourhoods': 1000,
+        'neighbourhoods_synced': 500,
+        'success_rate': 50.0,
+        'error_message': None,
+        'sync_duration_seconds': None
+    })
+    
+    # Mark some forces as failed
+    test_db.update_force_status('sussex', 'Sussex Police', {
+        'last_sync_started': datetime.now() - timedelta(hours=1),
+        'sync_status': 'failed',
+        'neighbourhoods_expected': 273,
+        'neighbourhoods_synced': 0,
+        'error_message': 'Crash'
+    })
+    
+    strategy = determine_sync_strategy(test_db)
+    
+    assert strategy.sync_type == "recovery"
+    assert strategy.delay_minutes == 5
+    assert "incomplete" in strategy.reason.lower() or "crash" in strategy.reason.lower()
+    assert 'sussex' in strategy.force_ids
+
+
+def test_corrupted_state_detection(test_db):
+    """Test detection of corrupted sync state (completion before start)."""
+    # Add neighbourhoods
+    test_db.conn.execute("""
+        INSERT INTO neighbourhoods (force_id, neighbourhood_id, name, boundary)
+        VALUES ('test', 'test1', 'Test Area', ST_GeomFromText('POINT(0 0)'))
+    """)
+    
+    # Create corrupted metadata (completion before start - impossible!)
+    now = datetime.now()
+    test_db.save_sync_metadata({
+        'last_sync_started': now,
+        'last_sync_completed': now - timedelta(hours=1),  # Before start!
+        'sync_status': 'completed',
+        'total_forces': 44,
+        'forces_synced': 44,
+        'forces_failed': 0,
+        'total_neighbourhoods': 4656,
+        'neighbourhoods_synced': 4656,
+        'success_rate': 100.0,
+        'error_message': None,
+        'sync_duration_seconds': 7200
+    })
+    
+    strategy = determine_sync_strategy(test_db)
+    
+    assert strategy.sync_type == "full"
+    assert strategy.delay_minutes == 5
+    assert "corrupt" in strategy.reason.lower()

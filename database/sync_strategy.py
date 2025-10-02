@@ -57,7 +57,28 @@ def determine_sync_strategy(db_client: DuckDBClient) -> SyncStrategy:
             reason="No metadata (legacy database)"
         )
     
-    # Case 3: Detect stale lock (sync crashed mid-run)
+    # Case 3: Detect incomplete sync (started but never completed)
+    if metadata['last_sync_started'] and not metadata['last_sync_completed']:
+        logger.warning("Incomplete sync detected - sync started but never completed")
+        failed_forces = db_client.get_failed_forces()
+        return SyncStrategy(
+            sync_type="recovery",
+            delay_minutes=5,
+            force_ids=failed_forces,
+            reason="Incomplete sync detected (crash during sync)"
+        )
+    
+    # Case 4: Detect corrupted state (completion before start - impossible)
+    if (metadata['last_sync_completed'] and metadata['last_sync_started'] and
+        metadata['last_sync_completed'] < metadata['last_sync_started']):
+        logger.warning("Corrupted sync state detected")
+        return SyncStrategy(
+            sync_type="full",
+            delay_minutes=5,
+            reason="Corrupted sync state"
+        )
+    
+    # Case 5: Detect stale lock (sync crashed mid-run)
     if metadata['sync_status'] == 'running':
         if metadata['last_sync_started']:
             hours_since = (datetime.now() - metadata['last_sync_started']).total_seconds() / 3600
@@ -74,7 +95,7 @@ def determine_sync_strategy(db_client: DuckDBClient) -> SyncStrategy:
                     reason=f"Stale lock detected ({hours_since:.1f}h old)"
                 )
     
-    # Case 4: Last sync failed - recover failed forces
+    # Case 6: Last sync failed - recover failed forces
     if metadata['sync_status'] == 'failed':
         failed_forces = db_client.get_failed_forces()
         if failed_forces:
@@ -96,7 +117,7 @@ def determine_sync_strategy(db_client: DuckDBClient) -> SyncStrategy:
                 reason="Last sync failed (no force tracking)"
             )
     
-    # Case 5: Check data freshness
+    # Case 7: Check data freshness
     if metadata['last_sync_completed']:
         days_old = (datetime.now() - metadata['last_sync_completed']).total_seconds() / 86400
         
@@ -115,7 +136,7 @@ def determine_sync_strategy(db_client: DuckDBClient) -> SyncStrategy:
                 reason=f"Data is {days_old:.1f} days old (weekly sync scheduled)"
             )
     
-    # Case 6: Data is fresh
+    # Case 8: Data is fresh
     logger.info("Data is fresh - no sync needed")
     return SyncStrategy(
         sync_type="skip",
