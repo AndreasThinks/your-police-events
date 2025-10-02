@@ -451,7 +451,7 @@ async def trigger_sync(request: Request):
     """
     try:
         logger.info("Manual sync triggered")
-        run_sync(db_client)
+        await run_sync_async(db_client)
         neighbourhood_count = db_client.get_neighbourhood_count()
         return {
             "status": "success",
