@@ -408,23 +408,30 @@ async def get_calendar(force_id: str, neighbourhood_id: str):
 @app.get("/admin/status")
 async def get_status():
     """
-    Get system status and statistics.
+    Get comprehensive system status including sync progress and database statistics.
     """
-    neighbourhood_count = db_client.get_neighbourhood_count() if db_client else 0
+    from database.sync_state import sync_state
+    
+    # Get database statistics
+    db_stats = db_client.get_database_stats() if db_client else {
+        "neighbourhoods": 0,
+        "forces": 0,
+        "storage_mb": 0.0,
+        "last_updated": None
+    }
     
     # Get cache statistics
     cache_size = len(calendar_cache)
     cache_max = calendar_cache.maxsize
-    
-    # Get postcode cache size if available
     postcode_cache_size = len(location_service._postcode_cache) if location_service else 0
+    
+    # Get sync state
+    sync_info = await sync_state.get_state()
     
     return {
         "status": "operational",
-        "database": {
-            "neighbourhoods": neighbourhood_count,
-            "path": os.getenv("DATABASE_PATH", "./data/police_events.duckdb")
-        },
+        "database": db_stats,
+        "sync": sync_info,
         "cache": {
             "calendar_feeds": {
                 "size": cache_size,

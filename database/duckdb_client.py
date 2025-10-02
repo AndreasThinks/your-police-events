@@ -176,3 +176,43 @@ class DuckDBClient:
         """Clear all neighbourhoods from the database."""
         self.conn.execute("DELETE FROM neighbourhoods")
         logger.info("Cleared all neighbourhoods from database")
+    
+    def get_database_stats(self) -> dict:
+        """Get database statistics including size and counts."""
+        import os
+        
+        stats = {
+            "neighbourhoods": self.get_neighbourhood_count(),
+            "forces": 0,
+            "storage_mb": 0.0,
+            "last_updated": None
+        }
+        
+        # Get number of unique forces
+        try:
+            result = self.conn.execute(
+                "SELECT COUNT(DISTINCT force_id) FROM neighbourhoods"
+            ).fetchone()
+            stats["forces"] = result[0] if result else 0
+        except Exception as e:
+            logger.error(f"Error getting force count: {e}")
+        
+        # Get last updated timestamp
+        try:
+            result = self.conn.execute(
+                "SELECT MAX(updated_at) FROM neighbourhoods"
+            ).fetchone()
+            if result and result[0]:
+                stats["last_updated"] = result[0].isoformat()
+        except Exception as e:
+            logger.error(f"Error getting last updated: {e}")
+        
+        # Get database file size
+        try:
+            if os.path.exists(self.db_path):
+                size_bytes = os.path.getsize(self.db_path)
+                stats["storage_mb"] = round(size_bytes / (1024 * 1024), 2)
+        except Exception as e:
+            logger.error(f"Error getting database size: {e}")
+        
+        return stats
