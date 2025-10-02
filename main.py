@@ -189,12 +189,12 @@ async def health_check():
 
 @app.post("/lookup", response_model=PostcodeLookupResponse)
 @limiter.limit("10/minute")
-async def lookup_postcode(request: PostcodeLookupRequest, http_request: Request):
+async def lookup_postcode(postcode_request: PostcodeLookupRequest, request: Request):
     """
     Look up a postcode and return the calendar URL for that neighbourhood.
     Rate limited to 10 requests per minute per IP.
     """
-    postcode = request.postcode.strip()
+    postcode = postcode_request.postcode.strip()
     
     if not postcode:
         raise HTTPException(status_code=400, detail="Postcode is required")
@@ -220,7 +220,7 @@ async def lookup_postcode(request: PostcodeLookupRequest, http_request: Request)
         force_id, neighbourhood_id, neighbourhood_name = result
         
         # Generate calendar URL
-        base_url = str(http_request.base_url).rstrip('/')
+        base_url = str(request.base_url).rstrip('/')
         calendar_url = f"{base_url}/calendar/{force_id}/{neighbourhood_id}.ics"
         
         # Fetch events for preview - wrap in try/except to ensure we always return valid response
@@ -285,13 +285,13 @@ async def lookup_postcode(request: PostcodeLookupRequest, http_request: Request)
 
 @app.post("/lookup-coords", response_model=PostcodeLookupResponse)
 @limiter.limit("10/minute")
-async def lookup_coordinates(request: CoordinateLookupRequest, http_request: Request):
+async def lookup_coordinates(coords_request: CoordinateLookupRequest, request: Request):
     """
     Look up coordinates and return the calendar URL for that neighbourhood.
     Rate limited to 10 requests per minute per IP.
     """
-    latitude = request.latitude
-    longitude = request.longitude
+    latitude = coords_request.latitude
+    longitude = coords_request.longitude
     
     # Validate coordinates are in UK range
     if not (49.0 <= latitude <= 61.0 and -8.0 <= longitude <= 2.0):
@@ -313,7 +313,7 @@ async def lookup_coordinates(request: CoordinateLookupRequest, http_request: Req
         force_id, neighbourhood_id, neighbourhood_name = result
         
         # Generate calendar URL
-        base_url = str(http_request.base_url).rstrip('/')
+        base_url = str(request.base_url).rstrip('/')
         calendar_url = f"{base_url}/calendar/{force_id}/{neighbourhood_id}.ics"
         
         # Fetch events for preview
