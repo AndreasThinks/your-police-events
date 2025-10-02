@@ -28,6 +28,7 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
         "forces_processed": 0,
         "forces_failed": 0,
         "total_neighbourhoods": 0,
+        "neighbourhoods_processed": 0,
         "neighbourhoods_synced": 0,
         "neighbourhoods_no_boundary": 0,
         "neighbourhoods_failed": 0,
@@ -74,12 +75,15 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
                 f"({stats['forces_processed']}/{stats['total_forces']})"
             )
             
+            # Update total neighbourhoods count
+            stats["total_neighbourhoods"] += len(neighbourhoods)
+            
             # Update sync state
             await sync_state.update_progress(
                 current_force=force_id,
                 current_force_name=force_name,
                 forces_processed=stats["forces_processed"],
-                total_neighbourhoods=stats["total_neighbourhoods"] + len(neighbourhoods)
+                total_neighbourhoods=stats["total_neighbourhoods"]
             )
             
             force_success = 0
@@ -89,7 +93,7 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
             for neighbourhood in neighbourhoods:
                 neighbourhood_id = neighbourhood['id']
                 neighbourhood_name = neighbourhood['name']
-                stats["total_neighbourhoods"] += 1
+                stats["neighbourhoods_processed"] += 1
                 
                 # Get boundary for this neighbourhood
                 boundary = await police_client.get_neighbourhood_boundary(
