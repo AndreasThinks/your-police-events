@@ -298,6 +298,35 @@ Note: Rate limited to 1 request per hour.
 
 ## Recent Improvements
 
+### Smart Sync System (October 2025)
+- **Intelligent startup decisions**: Automatically determines what sync is needed on startup
+- **Crash recovery**: Detects stale locks from crashed syncs and recovers automatically
+- **Incremental recovery**: Only re-syncs forces that failed, not everything
+- **Persistent state**: Sync metadata survives restarts
+- **Per-force tracking**: Knows exactly which forces succeeded/failed
+- **Data freshness checks**: Avoids unnecessary syncs when data is current
+
+#### How Smart Sync Works
+
+On startup, the system analyzes the database state and decides:
+
+1. **Empty Database** → Schedule full sync (2 min delay)
+2. **Stale Lock Detected** (sync crashed >2h ago) → Schedule recovery sync (5 min delay)
+3. **Last Sync Failed** → Schedule recovery sync of failed forces only (5 min delay)
+4. **Data Stale** (>8 days old) → Schedule full sync (2 min delay)
+5. **Data Approaching Stale** (6-8 days) → Let weekly scheduler handle it
+6. **Data Fresh** (<6 days) → Skip sync, data is current
+
+**Benefits:**
+- ✅ No manual intervention needed after crashes
+- ✅ Efficient recovery (only re-sync what failed)
+- ✅ Avoids redundant full syncs
+- ✅ Deployment-friendly (delayed start prevents timeouts)
+
+**Database Tables:**
+- `sync_metadata`: Overall sync state, timing, and statistics
+- `force_sync_status`: Per-force tracking for granular recovery
+
 ### Enhanced Scraping (October 2025)
 - **Retry logic**: Automatic retry with exponential backoff for failed requests
 - **Improved success rate**: From ~78% to 95-100%

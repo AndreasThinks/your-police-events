@@ -16,7 +16,8 @@ from cachetools import TTLCache
 from api.police_uk import PoliceUKClient
 from api.ordnance_survey import OrdnanceSurveyClient
 from database.duckdb_client import DuckDBClient
-from database.sync import run_sync, run_sync_async
+from database.sync import run_sync, run_sync_async, sync_specific_forces
+from database.sync_strategy import determine_sync_strategy
 from services.location import LocationService
 from services.calendar import CalendarService
 from middleware.rate_limit import limiter, setup_rate_limiting
@@ -102,8 +103,59 @@ async def lifespan(app: FastAPI):
         id="weekly_sync",
         name="Weekly neighbourhood boundary sync"
     )
+    
+    # Determine smart sync strategy based on database state
+    if not initial_sync:
+        strategy = determine_sync_strategy(db_client)
+        logger.info(f"Sync strategy: {strategy}")
+        
+        if strategy.sync_type == "full":
+            # Schedule full sync
+            from datetime import datetime, timedelta
+            run_time = datetime.now() + timedelta(minutes=strategy.delay_minutes)
+            scheduler.add_job(
+                func=lambda: run_sync(db_client),
+                trigger="date",
+                run_date=run_time,
+                id="startup_full_sync",
+                name=f"Startup full sync ({strategy.reason})"
+            )
+            logger.info(f"Scheduled full sync in {strategy.delay_minutes} minutes: {strategy.reason}")
+            
+        elif strategy.sync_type == "recovery":
+            # Schedule recovery sync of failed forces only
+            from datetime import datetime, timedelta
+            run_time = datetime.now() + timedelta(minutes=strategy.delay_minutes)
+            
+            async def recovery_sync():
+                await sync_specific_forces(db_client, strategy.force_ids)
+            
+            def run_recovery():
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(recovery_sync())
+                finally:
+                    loop.close()
+            
+            scheduler.add_job(
+                func=run_recovery,
+                trigger="date",
+                run_date=run_time,
+                id="startup_recovery_sync",
+                name=f"Startup recovery sync ({len(strategy.force_ids)} forces)"
+            )
+            logger.info(
+                f"Scheduled recovery sync in {strategy.delay_minutes} minutes: "
+                f"{len(strategy.force_ids)} forces - {strategy.reason}"
+            )
+            
+        else:  # skip
+            logger.info(f"No startup sync needed: {strategy.reason}")
+    
     scheduler.start()
-    logger.info("Scheduled weekly sync job")
+    logger.info("Scheduler started")
     
     logger.info("Application startup complete")
     

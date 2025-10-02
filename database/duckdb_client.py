@@ -51,6 +51,38 @@ class DuckDBClient:
             ON neighbourhoods USING RTREE (boundary);
         """)
         
+        # Create sync metadata table
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS sync_metadata (
+                id INTEGER PRIMARY KEY DEFAULT 1,
+                last_sync_started TIMESTAMP,
+                last_sync_completed TIMESTAMP,
+                sync_status VARCHAR,
+                total_forces INTEGER,
+                forces_synced INTEGER,
+                forces_failed INTEGER,
+                total_neighbourhoods INTEGER,
+                neighbourhoods_synced INTEGER,
+                success_rate FLOAT,
+                error_message VARCHAR,
+                sync_duration_seconds INTEGER
+            );
+        """)
+        
+        # Create force sync status table
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS force_sync_status (
+                force_id VARCHAR PRIMARY KEY,
+                force_name VARCHAR,
+                last_sync_started TIMESTAMP,
+                last_sync_completed TIMESTAMP,
+                sync_status VARCHAR,
+                neighbourhoods_expected INTEGER,
+                neighbourhoods_synced INTEGER,
+                error_message VARCHAR
+            );
+        """)
+        
         logger.info("Database schema initialized")
     
     def insert_neighbourhood(
@@ -216,3 +248,129 @@ class DuckDBClient:
             logger.error(f"Error getting database size: {e}")
         
         return stats
+    
+    def save_sync_metadata(self, metadata: Dict[str, Any]):
+        """Save sync metadata to database."""
+        try:
+            self.conn.execute("""
+                INSERT OR REPLACE INTO sync_metadata (
+                    id, last_sync_started, last_sync_completed, sync_status,
+                    total_forces, forces_synced, forces_failed,
+                    total_neighbourhoods, neighbourhoods_synced,
+                    success_rate, error_message, sync_duration_seconds
+                ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, [
+                metadata.get('last_sync_started'),
+                metadata.get('last_sync_completed'),
+                metadata.get('sync_status'),
+                metadata.get('total_forces'),
+                metadata.get('forces_synced'),
+                metadata.get('forces_failed'),
+                metadata.get('total_neighbourhoods'),
+                metadata.get('neighbourhoods_synced'),
+                metadata.get('success_rate'),
+                metadata.get('error_message'),
+                metadata.get('sync_duration_seconds')
+            ])
+            logger.debug("Saved sync metadata")
+        except Exception as e:
+            logger.error(f"Error saving sync metadata: {e}")
+            raise
+    
+    def get_sync_metadata(self) -> Optional[Dict[str, Any]]:
+        """Retrieve last sync metadata."""
+        try:
+            result = self.conn.execute("""
+                SELECT last_sync_started, last_sync_completed, sync_status,
+                       total_forces, forces_synced, forces_failed,
+                       total_neighbourhoods, neighbourhoods_synced,
+                       success_rate, error_message, sync_duration_seconds
+                FROM sync_metadata
+                WHERE id = 1
+            """).fetchone()
+            
+            if not result:
+                return None
+            
+            return {
+                'last_sync_started': result[0],
+                'last_sync_completed': result[1],
+                'sync_status': result[2],
+                'total_forces': result[3],
+                'forces_synced': result[4],
+                'forces_failed': result[5],
+                'total_neighbourhoods': result[6],
+                'neighbourhoods_synced': result[7],
+                'success_rate': result[8],
+                'error_message': result[9],
+                'sync_duration_seconds': result[10]
+            }
+        except Exception as e:
+            logger.error(f"Error getting sync metadata: {e}")
+            return None
+    
+    def update_force_status(self, force_id: str, force_name: str, status: Dict[str, Any]):
+        """Update sync status for a specific force."""
+        try:
+            self.conn.execute("""
+                INSERT OR REPLACE INTO force_sync_status (
+                    force_id, force_name, last_sync_started, last_sync_completed,
+                    sync_status, neighbourhoods_expected, neighbourhoods_synced,
+                    error_message
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, [
+                force_id,
+                force_name,
+                status.get('last_sync_started'),
+                status.get('last_sync_completed'),
+                status.get('sync_status'),
+                status.get('neighbourhoods_expected'),
+                status.get('neighbourhoods_synced'),
+                status.get('error_message')
+            ])
+            logger.debug(f"Updated force status for {force_id}")
+        except Exception as e:
+            logger.error(f"Error updating force status: {e}")
+            raise
+    
+    def get_failed_forces(self) -> List[str]:
+        """Get list of forces that failed in last sync."""
+        try:
+            results = self.conn.execute("""
+                SELECT force_id
+                FROM force_sync_status
+                WHERE sync_status IN ('failed', 'partial')
+                ORDER BY force_id
+            """).fetchall()
+            
+            return [row[0] for row in results]
+        except Exception as e:
+            logger.error(f"Error getting failed forces: {e}")
+            return []
+    
+    def get_force_status(self, force_id: str) -> Optional[Dict[str, Any]]:
+        """Get sync status for a specific force."""
+        try:
+            result = self.conn.execute("""
+                SELECT force_name, last_sync_started, last_sync_completed,
+                       sync_status, neighbourhoods_expected, neighbourhoods_synced,
+                       error_message
+                FROM force_sync_status
+                WHERE force_id = ?
+            """, [force_id]).fetchone()
+            
+            if not result:
+                return None
+            
+            return {
+                'force_name': result[0],
+                'last_sync_started': result[1],
+                'last_sync_completed': result[2],
+                'sync_status': result[3],
+                'neighbourhoods_expected': result[4],
+                'neighbourhoods_synced': result[5],
+                'error_message': result[6]
+            }
+        except Exception as e:
+            logger.error(f"Error getting force status: {e}")
+            return None

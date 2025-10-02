@@ -37,7 +37,24 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
     }
     
     try:
+        from datetime import datetime
+        sync_start_time = datetime.now()
+        
         logger.info("Starting neighbourhood sync with retry logic...")
+        
+        # Save initial sync metadata to database
+        db_client.save_sync_metadata({
+            'last_sync_started': sync_start_time,
+            'sync_status': 'running',
+            'total_forces': 0,
+            'forces_synced': 0,
+            'forces_failed': 0,
+            'total_neighbourhoods': 0,
+            'neighbourhoods_synced': 0,
+            'success_rate': 0.0,
+            'error_message': None,
+            'sync_duration_seconds': None
+        })
         
         # Get all forces
         forces = await police_client.get_forces()
@@ -47,6 +64,13 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
         if not forces:
             logger.error("Failed to fetch forces list - aborting sync")
             await sync_state.fail_sync("Failed to fetch forces list")
+            db_client.save_sync_metadata({
+                'last_sync_started': sync_start_time,
+                'last_sync_completed': datetime.now(),
+                'sync_status': 'failed',
+                'error_message': 'Failed to fetch forces list',
+                'sync_duration_seconds': int((datetime.now() - sync_start_time).total_seconds())
+            })
             return
         
         # Mark sync as started
@@ -55,6 +79,16 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
         for force in forces:
             force_id = force['id']
             force_name = force['name']
+            force_start_time = datetime.now()
+            
+            # Mark force sync as started
+            db_client.update_force_status(force_id, force_name, {
+                'last_sync_started': force_start_time,
+                'sync_status': 'running',
+                'neighbourhoods_expected': 0,
+                'neighbourhoods_synced': 0,
+                'error_message': None
+            })
             
             # Get neighbourhoods for this force
             neighbourhoods = await police_client.get_neighbourhoods(force_id)
@@ -66,6 +100,15 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
                     "force_id": force_id,
                     "force_name": force_name,
                     "reason": "No neighbourhoods returned"
+                })
+                # Mark force as failed
+                db_client.update_force_status(force_id, force_name, {
+                    'last_sync_started': force_start_time,
+                    'last_sync_completed': datetime.now(),
+                    'sync_status': 'failed',
+                    'neighbourhoods_expected': 0,
+                    'neighbourhoods_synced': 0,
+                    'error_message': 'No neighbourhoods returned'
                 })
                 continue
             
@@ -161,6 +204,17 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
                 f"  {force_name}: {force_success} synced, "
                 f"{force_no_boundary} no boundary, {force_failed} failed"
             )
+            
+            # Update force status
+            force_status = 'success' if force_failed == 0 else ('partial' if force_success > 0 else 'failed')
+            db_client.update_force_status(force_id, force_name, {
+                'last_sync_started': force_start_time,
+                'last_sync_completed': datetime.now(),
+                'sync_status': force_status,
+                'neighbourhoods_expected': len(neighbourhoods),
+                'neighbourhoods_synced': force_success,
+                'error_message': f"{force_failed} neighbourhoods failed" if force_failed > 0 else None
+            })
         
         # Final summary
         logger.info("="*70)
@@ -204,6 +258,24 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
         
         logger.info("="*70)
         
+        # Save final sync metadata to database
+        sync_end_time = datetime.now()
+        sync_duration = int((sync_end_time - sync_start_time).total_seconds())
+        
+        db_client.save_sync_metadata({
+            'last_sync_started': sync_start_time,
+            'last_sync_completed': sync_end_time,
+            'sync_status': 'completed',
+            'total_forces': stats['total_forces'],
+            'forces_synced': stats['forces_processed'],
+            'forces_failed': stats['forces_failed'],
+            'total_neighbourhoods': stats['total_neighbourhoods'],
+            'neighbourhoods_synced': stats['neighbourhoods_synced'],
+            'success_rate': success_rate,
+            'error_message': None,
+            'sync_duration_seconds': sync_duration
+        })
+        
         # Mark sync as completed
         await sync_state.complete_sync(
             neighbourhoods_synced=stats["neighbourhoods_synced"],
@@ -217,7 +289,143 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
     except Exception as e:
         logger.error(f"Sync failed with exception: {e}")
         await sync_state.fail_sync(str(e))
+        
+        # Save failed sync metadata
+        from datetime import datetime
+        if 'sync_start_time' in locals():
+            db_client.save_sync_metadata({
+                'last_sync_started': sync_start_time,
+                'last_sync_completed': datetime.now(),
+                'sync_status': 'failed',
+                'total_forces': stats.get('total_forces', 0),
+                'forces_synced': stats.get('forces_processed', 0),
+                'forces_failed': stats.get('forces_failed', 0),
+                'total_neighbourhoods': stats.get('total_neighbourhoods', 0),
+                'neighbourhoods_synced': stats.get('neighbourhoods_synced', 0),
+                'success_rate': 0.0,
+                'error_message': str(e),
+                'sync_duration_seconds': int((datetime.now() - sync_start_time).total_seconds())
+            })
         raise
+    finally:
+        await police_client.close()
+
+
+async def sync_specific_forces(db_client: DuckDBClient, force_ids: List[str]):
+    """
+    Sync only specific forces (for recovery from failures).
+    
+    Args:
+        db_client: Connected DuckDB client
+        force_ids: List of force IDs to sync
+    """
+    police_client = PoliceUKClient(timeout=60.0, max_retries=3)
+    
+    try:
+        from datetime import datetime
+        sync_start_time = datetime.now()
+        
+        logger.info(f"Starting recovery sync for {len(force_ids)} forces...")
+        
+        # Get all forces to map IDs to names
+        all_forces = await police_client.get_forces()
+        forces_to_sync = [f for f in all_forces if f['id'] in force_ids]
+        
+        if not forces_to_sync:
+            logger.warning("No forces found to sync")
+            return
+        
+        logger.info(f"Syncing forces: {', '.join([f['name'] for f in forces_to_sync])}")
+        
+        # Use the same sync logic but only for specified forces
+        stats = {
+            "total_forces": len(forces_to_sync),
+            "forces_processed": 0,
+            "forces_failed": 0,
+            "total_neighbourhoods": 0,
+            "neighbourhoods_processed": 0,
+            "neighbourhoods_synced": 0,
+            "neighbourhoods_no_boundary": 0,
+            "neighbourhoods_failed": 0
+        }
+        
+        for force in forces_to_sync:
+            force_id = force['id']
+            force_name = force['name']
+            force_start_time = datetime.now()
+            
+            db_client.update_force_status(force_id, force_name, {
+                'last_sync_started': force_start_time,
+                'sync_status': 'running',
+                'neighbourhoods_expected': 0,
+                'neighbourhoods_synced': 0,
+                'error_message': None
+            })
+            
+            neighbourhoods = await police_client.get_neighbourhoods(force_id)
+            
+            if not neighbourhoods:
+                logger.warning(f"No neighbourhoods for {force_name}")
+                stats["forces_failed"] += 1
+                db_client.update_force_status(force_id, force_name, {
+                    'last_sync_started': force_start_time,
+                    'last_sync_completed': datetime.now(),
+                    'sync_status': 'failed',
+                    'neighbourhoods_expected': 0,
+                    'neighbourhoods_synced': 0,
+                    'error_message': 'No neighbourhoods returned'
+                })
+                continue
+            
+            stats["forces_processed"] += 1
+            stats["total_neighbourhoods"] += len(neighbourhoods)
+            
+            force_success = 0
+            force_failed = 0
+            
+            for neighbourhood in neighbourhoods:
+                neighbourhood_id = neighbourhood['id']
+                neighbourhood_name = neighbourhood['name']
+                stats["neighbourhoods_processed"] += 1
+                
+                boundary = await police_client.get_neighbourhood_boundary(force_id, neighbourhood_id)
+                
+                if boundary and len(boundary) > 0:
+                    try:
+                        db_client.insert_neighbourhood(
+                            force_id=force_id,
+                            neighbourhood_id=neighbourhood_id,
+                            name=neighbourhood_name,
+                            boundary_coords=boundary
+                        )
+                        stats["neighbourhoods_synced"] += 1
+                        force_success += 1
+                    except Exception as e:
+                        logger.error(f"Database error: {e}")
+                        stats["neighbourhoods_failed"] += 1
+                        force_failed += 1
+                elif boundary is not None and len(boundary) == 0:
+                    stats["neighbourhoods_no_boundary"] += 1
+                else:
+                    stats["neighbourhoods_failed"] += 1
+                    force_failed += 1
+                
+                await asyncio.sleep(0.1)
+            
+            force_status = 'success' if force_failed == 0 else ('partial' if force_success > 0 else 'failed')
+            db_client.update_force_status(force_id, force_name, {
+                'last_sync_started': force_start_time,
+                'last_sync_completed': datetime.now(),
+                'sync_status': force_status,
+                'neighbourhoods_expected': len(neighbourhoods),
+                'neighbourhoods_synced': force_success,
+                'error_message': f"{force_failed} failed" if force_failed > 0 else None
+            })
+            
+            logger.info(f"  {force_name}: {force_success} synced, {force_failed} failed")
+        
+        logger.info(f"Recovery sync complete: {stats['neighbourhoods_synced']}/{stats['total_neighbourhoods']} synced")
+        
     finally:
         await police_client.close()
 
