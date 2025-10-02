@@ -148,6 +148,11 @@ class PostcodeLookupRequest(BaseModel):
     postcode: str
 
 
+class CoordinateLookupRequest(BaseModel):
+    latitude: float
+    longitude: float
+
+
 class EventPreview(BaseModel):
     title: str
     start_date: str
@@ -276,6 +281,94 @@ async def lookup_postcode(request: PostcodeLookupRequest, http_request: Request)
         logger.error(f"Error looking up postcode {postcode}: {e}")
         detail = get_api_error_message()
         raise HTTPException(status_code=500, detail=detail)
+
+
+@app.post("/lookup-coords", response_model=PostcodeLookupResponse)
+@limiter.limit("10/minute")
+async def lookup_coordinates(request: CoordinateLookupRequest, http_request: Request):
+    """
+    Look up coordinates and return the calendar URL for that neighbourhood.
+    Rate limited to 10 requests per minute per IP.
+    """
+    latitude = request.latitude
+    longitude = request.longitude
+    
+    # Validate coordinates are in UK range
+    if not (49.0 <= latitude <= 61.0 and -8.0 <= longitude <= 2.0):
+        raise HTTPException(
+            status_code=400, 
+            detail="Coordinates are outside UK boundaries"
+        )
+    
+    try:
+        # Find neighbourhood by coordinates
+        result = location_service.find_neighbourhood_by_coords(longitude, latitude)
+        
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail="No police neighbourhood found at these coordinates. The area may not have neighbourhood policing data available."
+            )
+        
+        force_id, neighbourhood_id, neighbourhood_name = result
+        
+        # Generate calendar URL
+        base_url = str(http_request.base_url).rstrip('/')
+        calendar_url = f"{base_url}/calendar/{force_id}/{neighbourhood_id}.ics"
+        
+        # Fetch events for preview
+        preview_events = []
+        event_count = 0
+        
+        try:
+            events = await police_client.get_neighbourhood_events(force_id, neighbourhood_id)
+            
+            if events:
+                from datetime import datetime
+                now = datetime.now()
+                upcoming_events = []
+                
+                for event in events:
+                    try:
+                        start_date_str = event.get('start_date', '')
+                        if not start_date_str:
+                            continue
+                        
+                        start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+                        if start_date >= now:
+                            upcoming_events.append(EventPreview(
+                                title=event.get('title', 'Untitled Event'),
+                                start_date=start_date_str,
+                                end_date=event.get('end_date', ''),
+                                address=event.get('address', ''),
+                                description=event.get('description', '')[:200] if event.get('description') else ''
+                            ))
+                    except (ValueError, KeyError, TypeError) as parse_error:
+                        logger.debug(f"Skipping event due to parsing error: {parse_error}")
+                        continue
+                
+                if upcoming_events:
+                    upcoming_events.sort(key=lambda e: e.start_date)
+                    preview_events = upcoming_events[:3]
+                    event_count = len(upcoming_events)
+                    
+        except Exception as e:
+            logger.warning(f"Could not fetch events for preview: {e}")
+        
+        return PostcodeLookupResponse(
+            force_id=force_id,
+            neighbourhood_id=neighbourhood_id,
+            neighbourhood_name=neighbourhood_name,
+            calendar_url=calendar_url,
+            event_count=event_count,
+            preview_events=preview_events
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error looking up coordinates ({latitude}, {longitude}): {e}")
+        raise HTTPException(status_code=500, detail="Error processing coordinates")
 
 
 @app.get("/calendar/{force_id}/{neighbourhood_id}.ics")

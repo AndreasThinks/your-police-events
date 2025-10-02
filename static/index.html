@@ -337,6 +337,8 @@
         locationBtn.addEventListener('click', async () => {
             if (!navigator.geolocation) {
                 error.textContent = 'Geolocation is not supported by your browser';
+                error.style.background = '#f8d7da';
+                error.style.color = '#721c24';
                 error.classList.add('show');
                 return;
             }
@@ -344,23 +346,93 @@
             locationBtn.disabled = true;
             locationBtn.textContent = '📍 Getting location...';
             error.classList.remove('show');
+            result.classList.remove('show');
+            loading.classList.add('show');
+            loadingMessage.textContent = '📍 Getting your location...';
             
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
                     try {
-                        // For now, just show coordinates - in production you'd reverse geocode
                         const lat = position.coords.latitude;
                         const lng = position.coords.longitude;
                         
-                        // Simple message - in production, call reverse geocoding API
-                        error.textContent = `Location found: ${lat.toFixed(4)}, ${lng.toFixed(4)}. Please enter your postcode manually for now.`;
-                        error.style.background = '#d1ecf1';
-                        error.style.color = '#0c5460';
-                        error.classList.add('show');
+                        loadingMessage.textContent = '🔍 Finding your neighbourhood...';
+                        
+                        // Call our coordinate lookup API
+                        const response = await fetch('/lookup-coords', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ 
+                                latitude: lat, 
+                                longitude: lng 
+                            }),
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(data.detail || 'Failed to find neighbourhood');
+                        }
+                        
+                        // Show result (same as postcode lookup)
+                        document.getElementById('neighbourhoodName').textContent = data.neighbourhood_name;
+                        document.getElementById('calendarUrl').textContent = data.calendar_url;
+                        
+                        // Show event count
+                        const eventCountEl = document.getElementById('eventCount');
+                        if (data.event_count > 0) {
+                            eventCountEl.textContent = `${data.event_count} upcoming event${data.event_count !== 1 ? 's' : ''}`;
+                            eventCountEl.classList.remove('zero');
+                        } else {
+                            eventCountEl.textContent = 'No upcoming events';
+                            eventCountEl.classList.add('zero');
+                        }
+                        
+                        // Show event preview
+                        const eventsPreview = document.getElementById('eventsPreview');
+                        const eventsList = document.getElementById('eventsList');
+                        
+                        if (data.preview_events && data.preview_events.length > 0) {
+                            eventsList.innerHTML = '';
+                            data.preview_events.forEach(event => {
+                                const eventCard = document.createElement('div');
+                                eventCard.className = 'event-card';
+                                
+                                const startDate = new Date(event.start_date);
+                                const dateStr = startDate.toLocaleDateString('en-GB', {
+                                    weekday: 'short',
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                });
+                                
+                                eventCard.innerHTML = `
+                                    <h4>${event.title}</h4>
+                                    <div class="event-date">📅 ${dateStr}</div>
+                                    <div class="event-location">📍 ${event.address}</div>
+                                    ${event.description ? `<div class="event-description">${event.description}</div>` : ''}
+                                `;
+                                eventsList.appendChild(eventCard);
+                            });
+                            eventsPreview.style.display = 'block';
+                        } else if (data.event_count === 0) {
+                            eventsList.innerHTML = '<div class="no-events">No upcoming events scheduled</div>';
+                            eventsPreview.style.display = 'block';
+                        }
+                        
+                        result.classList.add('show');
+                        loading.classList.remove('show');
                         
                     } catch (err) {
-                        error.textContent = 'Could not determine postcode from location';
+                        error.textContent = err.message;
+                        error.style.background = '#f8d7da';
+                        error.style.color = '#721c24';
                         error.classList.add('show');
+                        loading.classList.remove('show');
                     } finally {
                         locationBtn.disabled = false;
                         locationBtn.textContent = '📍 Use Location';
@@ -368,7 +440,10 @@
                 },
                 (err) => {
                     error.textContent = 'Location access denied. Please enter postcode manually.';
+                    error.style.background = '#f8d7da';
+                    error.style.color = '#721c24';
                     error.classList.add('show');
+                    loading.classList.remove('show');
                     locationBtn.disabled = false;
                     locationBtn.textContent = '📍 Use Location';
                 }

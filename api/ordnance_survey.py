@@ -49,14 +49,16 @@ class OrdnanceSurveyClient:
             
             if data.get("results") and len(data["results"]) > 0:
                 result = data["results"][0]
+                # Data is nested under GAZETTEER_ENTRY
+                gazetteer = result.get("GAZETTEER_ENTRY", {})
                 return {
-                    "name": result.get("NAME1"),
-                    "geometry_x": result.get("GEOMETRY_X"),
-                    "geometry_y": result.get("GEOMETRY_Y"),
-                    "postcode_district": result.get("POSTCODE_DISTRICT"),
-                    "populated_place": result.get("POPULATED_PLACE"),
-                    "county": result.get("COUNTY_UNITARY"),
-                    "country": result.get("COUNTRY")
+                    "name": gazetteer.get("NAME1"),
+                    "geometry_x": gazetteer.get("GEOMETRY_X"),
+                    "geometry_y": gazetteer.get("GEOMETRY_Y"),
+                    "postcode_district": gazetteer.get("POSTCODE_DISTRICT"),
+                    "populated_place": gazetteer.get("POPULATED_PLACE"),
+                    "county": gazetteer.get("COUNTY_UNITARY"),
+                    "country": gazetteer.get("COUNTRY")
                 }
             
             logger.warning(f"No results found for postcode: {postcode}")

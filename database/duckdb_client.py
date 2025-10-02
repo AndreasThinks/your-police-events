@@ -141,7 +141,7 @@ class DuckDBClient:
         self, easting: float, northing: float
     ) -> Tuple[float, float]:
         """
-        Transform British National Grid coordinates to WGS84 (lat/lng).
+        Transform British National Grid coordinates to WGS84 (lng/lat).
         
         Args:
             easting: BNG easting (GEOMETRY_X)
@@ -157,6 +157,7 @@ class DuckDBClient:
                     ST_Y(ST_Transform(ST_Point(?, ?), 'EPSG:27700', 'EPSG:4326')) as lat
             """, [easting, northing, easting, northing]).fetchone()
             
+            # Return (longitude, latitude)
             return (result[0], result[1])
             
         except Exception as e:
