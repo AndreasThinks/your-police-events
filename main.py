@@ -218,38 +218,48 @@ async def lookup_postcode(request: PostcodeLookupRequest, http_request: Request)
         base_url = str(http_request.base_url).rstrip('/')
         calendar_url = f"{base_url}/calendar/{force_id}/{neighbourhood_id}.ics"
         
-        # Fetch events for preview
+        # Fetch events for preview - wrap in try/except to ensure we always return valid response
+        preview_events = []
+        event_count = 0
+        
         try:
             events = await police_client.get_neighbourhood_events(force_id, neighbourhood_id)
             
-            # Get next 3 upcoming events
-            from datetime import datetime
-            now = datetime.now()
-            upcoming_events = []
-            
-            for event in events:
-                try:
-                    start_date = datetime.fromisoformat(event['start_date'].replace('Z', '+00:00'))
-                    if start_date >= now:
-                        upcoming_events.append(EventPreview(
-                            title=event.get('title', 'Untitled Event'),
-                            start_date=event.get('start_date', ''),
-                            end_date=event.get('end_date', ''),
-                            address=event.get('address', ''),
-                            description=event.get('description', '')
-                        ))
-                except (ValueError, KeyError):
-                    continue
-            
-            # Sort by start date and take first 3
-            upcoming_events.sort(key=lambda e: e.start_date)
-            preview_events = upcoming_events[:3]
-            event_count = len(upcoming_events)
-            
+            if events:
+                # Get next 3 upcoming events
+                from datetime import datetime
+                now = datetime.now()
+                upcoming_events = []
+                
+                for event in events:
+                    try:
+                        start_date_str = event.get('start_date', '')
+                        if not start_date_str:
+                            continue
+                        
+                        # Parse date and check if it's in the future
+                        start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+                        if start_date >= now:
+                            upcoming_events.append(EventPreview(
+                                title=event.get('title', 'Untitled Event'),
+                                start_date=start_date_str,
+                                end_date=event.get('end_date', ''),
+                                address=event.get('address', ''),
+                                description=event.get('description', '')[:200] if event.get('description') else ''
+                            ))
+                    except (ValueError, KeyError, TypeError) as parse_error:
+                        logger.debug(f"Skipping event due to parsing error: {parse_error}")
+                        continue
+                
+                # Sort by start date and take first 3
+                if upcoming_events:
+                    upcoming_events.sort(key=lambda e: e.start_date)
+                    preview_events = upcoming_events[:3]
+                    event_count = len(upcoming_events)
+                    
         except Exception as e:
+            # Log but don't fail the request
             logger.warning(f"Could not fetch events for preview: {e}")
-            preview_events = []
-            event_count = 0
         
         return PostcodeLookupResponse(
             force_id=force_id,
