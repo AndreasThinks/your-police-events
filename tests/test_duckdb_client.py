@@ -70,8 +70,9 @@ def test_transform_bng_to_wgs84(temp_db):
     lng, lat = temp_db.transform_bng_to_wgs84(easting, northing)
     
     # Check coordinates are in reasonable range for UK
-    assert -2.0 < lng < -1.0
-    assert 52.0 < lat < 53.0
+    # Note: transform returns (lat, lng) not (lng, lat)
+    assert -2.0 < lat < -1.0
+    assert 52.0 < lng < 53.0
 
 
 def test_insert_or_replace_neighbourhood(temp_db, sample_boundary_coords):

@@ -19,6 +19,15 @@ from database.duckdb_client import DuckDBClient
 from database.sync import run_sync, run_sync_async
 from services.location import LocationService
 from services.calendar import CalendarService
+from middleware.rate_limit import limiter, setup_rate_limiting
+from middleware.monitoring import setup_monitoring
+from utils.error_messages import (
+    validate_uk_postcode,
+    get_postcode_not_found_message,
+    get_neighbourhood_not_found_message,
+    get_api_error_message,
+    suggest_postcode_corrections
+)
 
 # Load environment variables
 load_dotenv()
@@ -126,6 +135,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Set up middleware
+setup_rate_limiting(app)
+setup_monitoring()
+
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -160,24 +173,34 @@ async def health_check():
 
 
 @app.post("/lookup", response_model=PostcodeLookupResponse)
+@limiter.limit("10/minute")
 async def lookup_postcode(request: PostcodeLookupRequest, http_request: Request):
     """
     Look up a postcode and return the calendar URL for that neighbourhood.
+    Rate limited to 10 requests per minute per IP.
     """
     postcode = request.postcode.strip()
     
     if not postcode:
         raise HTTPException(status_code=400, detail="Postcode is required")
     
+    # Validate postcode format
+    is_valid, error_msg = validate_uk_postcode(postcode)
+    if not is_valid:
+        suggestions = suggest_postcode_corrections(postcode)
+        detail = error_msg
+        if suggestions:
+            detail += f"\n\nDid you mean: {', '.join(suggestions)}?"
+        raise HTTPException(status_code=400, detail=detail)
+    
     try:
         # Find neighbourhood for postcode
         result = await location_service.find_neighbourhood_by_postcode(postcode)
         
         if not result:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No police neighbourhood found for postcode {postcode}"
-            )
+            # Provide helpful error message
+            detail = get_neighbourhood_not_found_message(postcode)
+            raise HTTPException(status_code=404, detail=detail)
         
         force_id, neighbourhood_id, neighbourhood_name = result
         
@@ -196,7 +219,8 @@ async def lookup_postcode(request: PostcodeLookupRequest, http_request: Request)
         raise
     except Exception as e:
         logger.error(f"Error looking up postcode {postcode}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        detail = get_api_error_message()
+        raise HTTPException(status_code=500, detail=detail)
 
 
 @app.get("/calendar/{force_id}/{neighbourhood_id}.ics")
@@ -233,10 +257,49 @@ async def get_calendar(force_id: str, neighbourhood_id: str):
     )
 
 
+@app.get("/admin/status")
+async def get_status():
+    """
+    Get system status and statistics.
+    """
+    neighbourhood_count = db_client.get_neighbourhood_count() if db_client else 0
+    
+    # Get cache statistics
+    cache_size = len(calendar_cache)
+    cache_max = calendar_cache.maxsize
+    
+    # Get postcode cache size if available
+    postcode_cache_size = len(location_service._postcode_cache) if location_service else 0
+    
+    return {
+        "status": "operational",
+        "database": {
+            "neighbourhoods": neighbourhood_count,
+            "path": os.getenv("DATABASE_PATH", "./data/police_events.duckdb")
+        },
+        "cache": {
+            "calendar_feeds": {
+                "size": cache_size,
+                "max_size": cache_max,
+                "ttl_hours": cache_ttl_hours
+            },
+            "postcode_lookups": {
+                "size": postcode_cache_size
+            }
+        },
+        "scheduler": {
+            "active": scheduler is not None and scheduler.running if scheduler else False,
+            "next_sync": "Weekly (every 7 days)"
+        }
+    }
+
+
 @app.post("/admin/sync")
-async def trigger_sync():
+@limiter.limit("1/hour")
+async def trigger_sync(http_request: Request):
     """
     Manually trigger a neighbourhood sync (admin endpoint).
+    Rate limited to 1 request per hour.
     """
     try:
         logger.info("Manual sync triggered")

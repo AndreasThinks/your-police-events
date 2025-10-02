@@ -8,12 +8,21 @@ from database.duckdb_client import DuckDBClient
 @pytest.mark.asyncio
 async def test_find_neighbourhood_by_postcode(temp_db, sample_boundary_coords, mocker):
     """Test finding neighbourhood by postcode."""
-    # Insert test neighbourhood
+    # Insert test neighbourhood with a generous polygon that will contain the transformed point
+    # The BNG coords (458700, 305800) transform to approximately (52.647, -1.134)
+    test_coords = [
+        {"latitude": "52.70", "longitude": "-1.20"},  # Top-left
+        {"latitude": "52.70", "longitude": "-1.10"},  # Top-right
+        {"latitude": "52.60", "longitude": "-1.10"},  # Bottom-right
+        {"latitude": "52.60", "longitude": "-1.20"},  # Bottom-left
+        {"latitude": "52.70", "longitude": "-1.20"},  # Close the polygon
+    ]
+    
     temp_db.insert_neighbourhood(
         force_id="leicestershire",
         neighbourhood_id="NC04",
         name="City Centre",
-        boundary_coords=sample_boundary_coords
+        boundary_coords=test_coords
     )
     
     # Mock OS API client

@@ -11,8 +11,9 @@ from api.ordnance_survey import OrdnanceSurveyClient
 @pytest.fixture
 def temp_db():
     """Create a temporary DuckDB database for testing."""
-    with tempfile.NamedTemporaryFile(suffix=".duckdb", delete=False) as f:
-        db_path = f.name
+    # Create temp directory and file path (but don't create the file)
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test.duckdb")
     
     db_client = DuckDBClient(db_path)
     db_client.connect()
@@ -24,6 +25,8 @@ def temp_db():
     # Clean up
     if os.path.exists(db_path):
         os.unlink(db_path)
+    if os.path.exists(temp_dir):
+        os.rmdir(temp_dir)
 
 
 @pytest.fixture
