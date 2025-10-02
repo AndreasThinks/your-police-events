@@ -153,12 +153,13 @@ class DuckDBClient:
         try:
             result = self.conn.execute("""
                 SELECT 
-                    ST_X(ST_Transform(ST_Point(?, ?), 'EPSG:27700', 'EPSG:4326')) as lng,
-                    ST_Y(ST_Transform(ST_Point(?, ?), 'EPSG:27700', 'EPSG:4326')) as lat
+                    ST_X(ST_Transform(ST_Point(?, ?), 'EPSG:27700', 'EPSG:4326')) as x,
+                    ST_Y(ST_Transform(ST_Point(?, ?), 'EPSG:27700', 'EPSG:4326')) as y
             """, [easting, northing, easting, northing]).fetchone()
             
-            # Return (longitude, latitude)
-            return (result[0], result[1])
+            # ST_Transform returns (lat, lng) but we need (lng, lat)
+            # ST_X gives latitude, ST_Y gives longitude (swapped!)
+            return (result[1], result[0])  # Return (longitude, latitude)
             
         except Exception as e:
             logger.error(f"Error transforming coordinates: {e}")
