@@ -1,6 +1,7 @@
 """Location service for postcode lookup and neighbourhood finding."""
 import logging
 from typing import Optional, Tuple
+from functools import lru_cache
 from api.ordnance_survey import OrdnanceSurveyClient
 from database.duckdb_client import DuckDBClient
 
@@ -13,6 +14,10 @@ class LocationService:
     def __init__(self, os_client: OrdnanceSurveyClient, db_client: DuckDBClient):
         self.os_client = os_client
         self.db_client = db_client
+        # Cache for postcode lookups (reduces OS API calls)
+        self._postcode_cache = {}
+        # Cache for coordinate lookups (reduces DB queries)
+        self._coord_cache = {}
     
     async def find_neighbourhood_by_postcode(
         self, postcode: str
@@ -26,6 +31,12 @@ class LocationService:
         Returns:
             Tuple of (force_id, neighbourhood_id, neighbourhood_name) or None
         """
+        # Check cache first
+        cache_key = postcode.upper().replace(" ", "")
+        if cache_key in self._postcode_cache:
+            logger.debug(f"Cache hit for postcode: {postcode}")
+            return self._postcode_cache[cache_key]
+        
         try:
             # Step 1: Get BNG coordinates from OS Names API
             postcode_data = await self.os_client.find_postcode(postcode)
@@ -65,12 +76,16 @@ class LocationService:
                 logger.info(
                     f"Found neighbourhood: {name} ({force_id}/{neighbourhood_id})"
                 )
+                # Cache the result
+                self._postcode_cache[cache_key] = neighbourhood
                 return neighbourhood
             else:
                 logger.warning(
                     f"No neighbourhood found for postcode {postcode} "
                     f"at coords ({longitude}, {latitude})"
                 )
+                # Cache negative result too (avoid repeated API calls)
+                self._postcode_cache[cache_key] = None
                 return None
                 
         except Exception as e:

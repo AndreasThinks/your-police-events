@@ -60,9 +60,17 @@ async def lifespan(app: FastAPI):
     neighbourhood_count = db_client.get_neighbourhood_count()
     logger.info(f"Database has {neighbourhood_count} neighbourhoods")
     
-    if neighbourhood_count == 0:
+    # Only run initial sync if explicitly enabled (to avoid deployment timeouts)
+    initial_sync = os.getenv("INITIAL_SYNC", "false").lower() == "true"
+    
+    if neighbourhood_count == 0 and initial_sync:
         logger.info("No neighbourhoods in database, running initial sync...")
         await run_sync_async(db_client)
+    elif neighbourhood_count == 0:
+        logger.warning(
+            "Database is empty but INITIAL_SYNC is not enabled. "
+            "Use POST /admin/sync to populate the database."
+        )
     
     # Initialize API clients
     os_api_key = os.getenv("OS_NAMES_API_KEY")
