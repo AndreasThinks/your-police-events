@@ -193,12 +193,65 @@
         }
         
         .copy-btn {
-            background: #28a745;
+            background: #6c757d;
             margin-bottom: 20px;
         }
         
         .copy-btn:hover {
-            background: #218838;
+            background: #5a6268;
+        }
+        
+        .subscribe-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .subscribe-btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: white;
+            width: 100%;
+        }
+        
+        .subscribe-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .subscribe-btn.google {
+            background: #4285F4;
+        }
+        
+        .subscribe-btn.google:hover {
+            background: #357ae8;
+        }
+        
+        .subscribe-btn.apple {
+            background: #555;
+        }
+        
+        .subscribe-btn.apple:hover {
+            background: #333;
+        }
+        
+        .subscribe-btn.outlook {
+            background: #0078D4;
+        }
+        
+        .subscribe-btn.outlook:hover {
+            background: #006abc;
         }
         
         .events-preview {
@@ -445,24 +498,18 @@
                 <p><strong>Neighbourhood:</strong> <span id="neighbourhoodName"></span></p>
                 <span class="event-count" id="eventCount"></span>
                 
+                <h3 style="color: #667eea; margin-bottom: 15px; font-size: 18px;">Subscribe to Calendar:</h3>
+                
+                <div class="subscribe-buttons" id="subscribeButtons">
+                    <!-- Buttons will be dynamically generated -->
+                </div>
+                
                 <div class="calendar-url" id="calendarUrl"></div>
                 <button class="copy-btn" onclick="copyToClipboard()">Copy URL</button>
                 
                 <div class="events-preview" id="eventsPreview" style="display: none;">
                     <h3>Upcoming Events</h3>
                     <div id="eventsList"></div>
-                </div>
-                
-                <div class="instructions">
-                    <h3>How to Subscribe:</h3>
-                    <ul>
-                        <li><strong>Google Calendar:</strong> Settings → Add calendar → From URL</li>
-                        <li><strong>Apple Calendar:</strong> File → New Calendar Subscription</li>
-                        <li><strong>Outlook:</strong> Add calendar → Subscribe from web</li>
-                    </ul>
-                    <p style="margin-top: 10px;">
-                        <small>Your calendar app will automatically check for new events.</small>
-                    </p>
                 </div>
             </div>
         </div>
@@ -535,6 +582,9 @@
                         // Show result (same as postcode lookup)
                         document.getElementById('neighbourhoodName').textContent = data.neighbourhood_name;
                         document.getElementById('calendarUrl').textContent = data.calendar_url;
+                        
+                        // Generate subscription buttons
+                        generateSubscriptionButtons(data.calendar_url);
                         
                         // Show event count
                         const eventCountEl = document.getElementById('eventCount');
@@ -641,6 +691,9 @@
                 document.getElementById('neighbourhoodName').textContent = data.neighbourhood_name;
                 document.getElementById('calendarUrl').textContent = data.calendar_url;
                 
+                // Generate subscription buttons
+                generateSubscriptionButtons(data.calendar_url);
+                
                 // Show event count
                 const eventCountEl = document.getElementById('eventCount');
                 if (data.event_count > 0) {
@@ -697,6 +750,41 @@
                 submitBtn.disabled = false;
             }
         });
+        
+        function generateSubscriptionButtons(calendarUrl) {
+            const subscribeButtonsContainer = document.getElementById('subscribeButtons');
+            subscribeButtonsContainer.innerHTML = '';
+            
+            // Convert http(s):// to webcal:// for calendar apps
+            const webcalUrl = calendarUrl.replace(/^https?:\/\//, 'webcal://');
+            
+            // Google Calendar
+            const googleUrl = `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcalUrl)}`;
+            const googleBtn = document.createElement('a');
+            googleBtn.href = googleUrl;
+            googleBtn.target = '_blank';
+            googleBtn.rel = 'noopener noreferrer';
+            googleBtn.className = 'subscribe-btn google';
+            googleBtn.innerHTML = 'Google Calendar';
+            subscribeButtonsContainer.appendChild(googleBtn);
+            
+            // Apple Calendar (webcal protocol)
+            const appleBtn = document.createElement('a');
+            appleBtn.href = webcalUrl;
+            appleBtn.className = 'subscribe-btn apple';
+            appleBtn.innerHTML = 'Apple Calendar';
+            subscribeButtonsContainer.appendChild(appleBtn);
+            
+            // Outlook.com
+            const outlookUrl = `https://outlook.live.com/calendar/0/addcalendar?url=${encodeURIComponent(calendarUrl)}&name=${encodeURIComponent('Police Events')}`;
+            const outlookBtn = document.createElement('a');
+            outlookBtn.href = outlookUrl;
+            outlookBtn.target = '_blank';
+            outlookBtn.rel = 'noopener noreferrer';
+            outlookBtn.className = 'subscribe-btn outlook';
+            outlookBtn.innerHTML = 'Outlook';
+            subscribeButtonsContainer.appendChild(outlookBtn);
+        }
         
         function copyToClipboard() {
             const url = document.getElementById('calendarUrl').textContent;
