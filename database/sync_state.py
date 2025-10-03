@@ -67,6 +67,7 @@ class LastSyncResult:
     total_neighbourhoods: int = 0
     forces_processed: int = 0
     forces_failed: int = 0
+    next_sync_at: Optional[datetime] = None
     
     @property
     def success_rate(self) -> float:
@@ -161,6 +162,22 @@ class SyncStateManager:
             self._timing.completed_at = datetime.now()
             self._error_message = error_message
     
+    async def set_next_sync(self, next_sync_at: datetime):
+        """Set the next scheduled sync time."""
+        async with self._lock:
+            if self._last_result:
+                self._last_result.next_sync_at = next_sync_at
+            else:
+                # Create a minimal last result if none exists
+                self._last_result = LastSyncResult(next_sync_at=next_sync_at)
+    
+    async def get_next_sync(self) -> Optional[datetime]:
+        """Get the next scheduled sync time."""
+        async with self._lock:
+            if self._last_result:
+                return self._last_result.next_sync_at
+            return None
+    
     async def get_state(self) -> Dict[str, Any]:
         """Get current sync state as dictionary."""
         async with self._lock:
@@ -200,7 +217,8 @@ class SyncStateManager:
                     "total_neighbourhoods": self._last_result.total_neighbourhoods,
                     "forces_processed": self._last_result.forces_processed,
                     "forces_failed": self._last_result.forces_failed,
-                    "success_rate": round(self._last_result.success_rate, 1)
+                    "success_rate": round(self._last_result.success_rate, 1),
+                    "next_sync_at": self._last_result.next_sync_at.isoformat() if self._last_result.next_sync_at else None
                 }
             
             return state

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local Police Events Calendar</title>
+    <title>Your Police Events</title>
     <style>
         * {
             margin: 0;
@@ -18,6 +18,12 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .main-content {
+            flex: 1;
         }
         
         .container {
@@ -32,13 +38,35 @@
         h1 {
             color: #667eea;
             margin-bottom: 10px;
-            font-size: 28px;
+            font-size: 32px;
+            font-weight: 700;
         }
         
         .subtitle {
             color: #666;
+            margin-bottom: 20px;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .intro-text {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
             margin-bottom: 30px;
             font-size: 14px;
+            line-height: 1.6;
+            color: #555;
+        }
+        
+        .intro-text a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .intro-text a:hover {
+            text-decoration: underline;
         }
         
         .input-group {
@@ -265,6 +293,35 @@
             display: block;
         }
         
+        footer {
+            max-width: 700px;
+            margin: 30px auto 20px;
+            padding: 20px;
+            text-align: center;
+            color: white;
+            font-size: 14px;
+        }
+        
+        footer a {
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+            transition: border-color 0.3s;
+        }
+        
+        footer a:hover {
+            border-bottom-color: white;
+        }
+        
+        .footer-links {
+            margin-bottom: 10px;
+        }
+        
+        .footer-credit {
+            opacity: 0.9;
+        }
+        
         /* Mobile Responsive Styles */
         @media (max-width: 600px) {
             body {
@@ -277,10 +334,14 @@
             }
             
             h1 {
-                font-size: 24px;
+                font-size: 26px;
             }
             
             .subtitle {
+                font-size: 15px;
+            }
+            
+            .intro-text {
                 font-size: 13px;
             }
             
@@ -314,6 +375,11 @@
             .event-card h4 {
                 font-size: 15px;
             }
+            
+            footer {
+                font-size: 13px;
+                padding: 15px;
+            }
         }
         
         @media (max-width: 400px) {
@@ -322,7 +388,7 @@
             }
             
             h1 {
-                font-size: 22px;
+                font-size: 24px;
             }
             
             .location-btn {
@@ -332,62 +398,82 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🚔 Local Police Events Calendar</h1>
-        <p class="subtitle">Get your neighbourhood police events as a calendar feed</p>
-        
-        <form id="postcodeForm">
-            <div class="input-group">
-                <label for="postcode">Enter Your Postcode</label>
-                <div class="input-wrapper">
-                    <input 
-                        type="text" 
-                        id="postcode" 
-                        name="postcode" 
-                        placeholder="e.g., SW1A 1AA"
-                        required
-                    >
-                    <button type="button" class="location-btn" id="locationBtn" title="Use my location">
-                        📍 Use Location
-                    </button>
+    <div class="main-content">
+        <div class="container">
+            <h1>Your Police Events</h1>
+            <p class="subtitle">Follow local neighbourhood policing events in your calendar</p>
+            
+            <div class="intro-text">
+                Enter your postcode to get a calendar feed of upcoming events from your local neighbourhood policing team. 
+                The feed updates automatically with new events from the <a href="https://data.police.uk/" target="_blank" rel="noopener noreferrer">Police UK API</a>, 
+                so you'll always stay informed about community engagement opportunities in your area.
+            </div>
+            
+            <form id="postcodeForm">
+                <div class="input-group">
+                    <label for="postcode">Enter Your Postcode</label>
+                    <div class="input-wrapper">
+                        <input 
+                            type="text" 
+                            id="postcode" 
+                            name="postcode" 
+                            placeholder="e.g., SW1A 1AA"
+                            required
+                        >
+                        <button type="button" class="location-btn" id="locationBtn" title="Use my location">
+                            Use Location
+                        </button>
+                    </div>
                 </div>
+                
+                <button type="submit" id="submitBtn">Find My Calendar</button>
+            </form>
+            
+            <div class="loading" id="loading">
+                <p id="loadingMessage">Finding your neighbourhood...</p>
             </div>
             
-            <button type="submit" id="submitBtn">Find My Calendar</button>
-        </form>
-        
-        <div class="loading" id="loading">
-            <p id="loadingMessage">🔍 Finding your neighbourhood...</p>
-        </div>
-        
-        <div class="error" id="error"></div>
-        
-        <div class="result" id="result">
-            <h2>✅ Your Calendar Feed</h2>
-            <p><strong>Neighbourhood:</strong> <span id="neighbourhoodName"></span></p>
-            <span class="event-count" id="eventCount"></span>
+            <div class="error" id="error"></div>
             
-            <div class="calendar-url" id="calendarUrl"></div>
-            <button class="copy-btn" onclick="copyToClipboard()">📋 Copy URL</button>
-            
-            <div class="events-preview" id="eventsPreview" style="display: none;">
-                <h3>📅 Upcoming Events</h3>
-                <div id="eventsList"></div>
-            </div>
-            
-            <div class="instructions">
-                <h3>How to Subscribe:</h3>
-                <ul>
-                    <li><strong>Google Calendar:</strong> Settings → Add calendar → From URL</li>
-                    <li><strong>Apple Calendar:</strong> File → New Calendar Subscription</li>
-                    <li><strong>Outlook:</strong> Add calendar → Subscribe from web</li>
-                </ul>
-                <p style="margin-top: 10px;">
-                    <small>Your calendar app will automatically check for new events.</small>
-                </p>
+            <div class="result" id="result">
+                <h2>Your Calendar Feed</h2>
+                <p><strong>Neighbourhood:</strong> <span id="neighbourhoodName"></span></p>
+                <span class="event-count" id="eventCount"></span>
+                
+                <div class="calendar-url" id="calendarUrl"></div>
+                <button class="copy-btn" onclick="copyToClipboard()">Copy URL</button>
+                
+                <div class="events-preview" id="eventsPreview" style="display: none;">
+                    <h3>Upcoming Events</h3>
+                    <div id="eventsList"></div>
+                </div>
+                
+                <div class="instructions">
+                    <h3>How to Subscribe:</h3>
+                    <ul>
+                        <li><strong>Google Calendar:</strong> Settings → Add calendar → From URL</li>
+                        <li><strong>Apple Calendar:</strong> File → New Calendar Subscription</li>
+                        <li><strong>Outlook:</strong> Add calendar → Subscribe from web</li>
+                    </ul>
+                    <p style="margin-top: 10px;">
+                        <small>Your calendar app will automatically check for new events.</small>
+                    </p>
+                </div>
             </div>
         </div>
     </div>
+    
+    <footer>
+        <div class="footer-links">
+            <a href="https://github.com/AndreasThinks/your-police-events" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
+        </div>
+        <div class="footer-credit">
+            A project by <a href="https://AndreasThinks.me" target="_blank" rel="noopener noreferrer">AndreasThinks</a> (and some vibes)
+        </div>
+        <div class="footer-sync-status" id="syncStatus" style="margin-top: 10px; font-size: 12px; opacity: 0.8;">
+            Loading sync status...
+        </div>
+    </footer>
     
     <script>
         const form = document.getElementById('postcodeForm');
@@ -409,11 +495,11 @@
             }
             
             locationBtn.disabled = true;
-            locationBtn.textContent = '📍 Getting location...';
+            locationBtn.textContent = 'Getting location...';
             error.classList.remove('show');
             result.classList.remove('show');
             loading.classList.add('show');
-            loadingMessage.textContent = '📍 Getting your location...';
+            loadingMessage.textContent = 'Getting your location...';
             
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
@@ -421,7 +507,7 @@
                         const lat = position.coords.latitude;
                         const lng = position.coords.longitude;
                         
-                        loadingMessage.textContent = '🔍 Finding your neighbourhood...';
+                        loadingMessage.textContent = 'Finding your neighbourhood...';
                         
                         // Call our coordinate lookup API
                         const response = await fetch('/lookup-coords', {
@@ -477,8 +563,8 @@
                                 
                                 eventCard.innerHTML = `
                                     <h4>${event.title}</h4>
-                                    <div class="event-date">📅 ${dateStr}</div>
-                                    <div class="event-location">📍 ${event.address}</div>
+                                    <div class="event-date">${dateStr}</div>
+                                    <div class="event-location">${event.address}</div>
                                     ${event.description ? `<div class="event-description">${event.description}</div>` : ''}
                                 `;
                                 eventsList.appendChild(eventCard);
@@ -500,7 +586,7 @@
                         loading.classList.remove('show');
                     } finally {
                         locationBtn.disabled = false;
-                        locationBtn.textContent = '📍 Use Location';
+                        locationBtn.textContent = 'Use Location';
                     }
                 },
                 (err) => {
@@ -510,7 +596,7 @@
                     error.classList.add('show');
                     loading.classList.remove('show');
                     locationBtn.disabled = false;
-                    locationBtn.textContent = '📍 Use Location';
+                    locationBtn.textContent = 'Use Location';
                 }
             );
         });
@@ -522,14 +608,14 @@
             
             // Reset UI
             loading.classList.add('show');
-            loadingMessage.textContent = '🔍 Looking up postcode...';
+            loadingMessage.textContent = 'Looking up postcode...';
             error.classList.remove('show');
             result.classList.remove('show');
             submitBtn.disabled = true;
             
             try {
                 setTimeout(() => {
-                    loadingMessage.textContent = '🔍 Finding your neighbourhood...';
+                    loadingMessage.textContent = 'Finding your neighbourhood...';
                 }, 500);
                 
                 const response = await fetch('/lookup', {
@@ -582,8 +668,8 @@
                         
                         eventCard.innerHTML = `
                             <h4>${event.title}</h4>
-                            <div class="event-date">📅 ${dateStr}</div>
-                            <div class="event-location">📍 ${event.address}</div>
+                            <div class="event-date">${dateStr}</div>
+                            <div class="event-location">${event.address}</div>
                             ${event.description ? `<div class="event-description">${event.description}</div>` : ''}
                         `;
                         eventsList.appendChild(eventCard);
@@ -612,12 +698,70 @@
             navigator.clipboard.writeText(url).then(() => {
                 const btn = event.target;
                 const originalText = btn.textContent;
-                btn.textContent = '✓ Copied!';
+                btn.textContent = 'Copied!';
                 setTimeout(() => {
                     btn.textContent = originalText;
                 }, 2000);
             });
         }
+        
+        // Format relative time with granular periods
+        function formatRelativeTime(timestamp, isPast = true) {
+            if (!timestamp) return null;
+            
+            const now = new Date();
+            const date = new Date(timestamp);
+            const diffMs = isPast ? (now - date) : (date - now);
+            const diffSeconds = Math.floor(diffMs / 1000);
+            const diffMinutes = Math.floor(diffSeconds / 60);
+            const diffHours = Math.floor(diffMinutes / 60);
+            const diffDays = Math.floor(diffHours / 24);
+            const diffWeeks = Math.floor(diffDays / 7);
+            
+            if (diffSeconds < 60) {
+                return isPast ? 'just now' : 'very soon';
+            } else if (diffMinutes < 60) {
+                const unit = diffMinutes === 1 ? 'minute' : 'minutes';
+                return isPast ? `${diffMinutes} ${unit} ago` : `in ${diffMinutes} ${unit}`;
+            } else if (diffHours < 24) {
+                const unit = diffHours === 1 ? 'hour' : 'hours';
+                return isPast ? `${diffHours} ${unit} ago` : `in ${diffHours} ${unit}`;
+            } else if (diffDays < 7) {
+                const unit = diffDays === 1 ? 'day' : 'days';
+                return isPast ? `${diffDays} ${unit} ago` : `in ${diffDays} ${unit}`;
+            } else {
+                const unit = diffWeeks === 1 ? 'week' : 'weeks';
+                return isPast ? `${diffWeeks} ${unit} ago` : `in ${diffWeeks} ${unit}`;
+            }
+        }
+        
+        // Fetch and display sync status
+        async function updateSyncStatus() {
+            try {
+                const response = await fetch('/api/sync-status');
+                const data = await response.json();
+                
+                const syncStatusEl = document.getElementById('syncStatus');
+                
+                if (data.last_updated && data.next_update) {
+                    const lastUpdated = formatRelativeTime(data.last_updated, true);
+                    const nextUpdate = formatRelativeTime(data.next_update, false);
+                    syncStatusEl.textContent = `Data last updated: ${lastUpdated} | Next update: ${nextUpdate}`;
+                } else if (data.next_update) {
+                    const nextUpdate = formatRelativeTime(data.next_update, false);
+                    syncStatusEl.textContent = `Next update: ${nextUpdate}`;
+                } else {
+                    syncStatusEl.textContent = 'Sync status unavailable';
+                }
+            } catch (err) {
+                console.error('Failed to fetch sync status:', err);
+                document.getElementById('syncStatus').textContent = '';
+            }
+        }
+        
+        // Update sync status on page load and every 60 seconds
+        updateSyncStatus();
+        setInterval(updateSyncStatus, 60000);
     </script>
 </body>
 </html>

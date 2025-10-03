@@ -14,6 +14,8 @@ from pydantic import BaseModel
 from concurrent.futures import ProcessPoolExecutor
 from dotenv import load_dotenv
 from cachetools import TTLCache
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
 from api.police_uk import PoliceUKClient
 from api.ordnance_survey import OrdnanceSurveyClient
@@ -86,16 +88,37 @@ police_client: Optional[PoliceUKClient] = None
 location_service: Optional[LocationService] = None
 calendar_service: Optional[CalendarService] = None
 executor: Optional[ProcessPoolExecutor] = None
+scheduler: Optional[AsyncIOScheduler] = None
 
 # Cache for calendar feeds (key: "force_id:neighbourhood_id", value: ics bytes)
 cache_ttl_hours = int(os.getenv("CACHE_TTL_HOURS", "3"))
 calendar_cache = TTLCache(maxsize=1000, ttl=cache_ttl_hours * 3600)
 
+# Sync configuration
+sync_interval_days = int(os.getenv("SYNC_INTERVAL_DAYS", "7"))
+
+
+async def scheduled_sync_job():
+    """Background job to sync neighbourhood data periodically."""
+    from database.sync_state import sync_state
+    
+    try:
+        logger.info(f"Starting scheduled sync (runs every {sync_interval_days} days)")
+        await run_sync_async(db_client)
+        
+        # Calculate and set next sync time
+        next_sync = datetime.now() + timedelta(days=sync_interval_days)
+        await sync_state.set_next_sync(next_sync)
+        
+        logger.info(f"Scheduled sync completed. Next sync at: {next_sync.isoformat()}")
+    except Exception as e:
+        logger.error(f"Error in scheduled sync: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle manager for startup and shutdown."""
-    global db_client, os_client, police_client, location_service, calendar_service, executor
+    global db_client, os_client, police_client, location_service, calendar_service, executor, scheduler
     
     logger.info("Starting up application...")
     
@@ -139,24 +162,37 @@ async def lifespan(app: FastAPI):
     
     logger.info("Process pool executor initialized for sync jobs")
     
+    # Initialize scheduler for automatic syncs
+    from database.sync_state import sync_state
+    
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(
+        scheduled_sync_job,
+        IntervalTrigger(days=sync_interval_days),
+        id='neighbourhood_sync',
+        name='Sync neighbourhood data',
+        replace_existing=True
+    )
+    scheduler.start()
+    logger.info(f"Scheduler started - will sync every {sync_interval_days} days")
+    
+    # Set initial next sync time
+    next_sync = datetime.now() + timedelta(days=sync_interval_days)
+    await sync_state.set_next_sync(next_sync)
+    logger.info(f"Next scheduled sync: {next_sync.isoformat()}")
+    
     # Determine smart sync strategy based on database state
     if not initial_sync:
         strategy = determine_sync_strategy(db_client)
         logger.info(f"Sync strategy: {strategy}")
         
         if strategy.sync_type == "full":
-            # Schedule full sync using executor
             logger.info(f"Will run full sync in background: {strategy.reason}")
-            # Note: For production, you'd want to use a proper scheduler like APScheduler
-            # with a process-based executor, or use a task queue like Celery
-            # For now, we'll trigger syncs manually via the admin endpoint
             
         elif strategy.sync_type == "recovery":
-            # Schedule recovery sync of failed forces only
             logger.info(
                 f"Recovery sync needed for {len(strategy.force_ids)} forces: {strategy.reason}"
             )
-            # Can be triggered manually via admin endpoint
             
         else:  # skip
             logger.info(f"No startup sync needed: {strategy.reason}")
@@ -167,6 +203,10 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down application...")
+    
+    if scheduler:
+        scheduler.shutdown(wait=False)
+        logger.info("Scheduler shut down")
     
     if executor:
         executor.shutdown(wait=True)
@@ -506,6 +546,29 @@ async def get_status():
     }
 
 
+@app.get("/api/sync-status")
+async def get_sync_status():
+    """
+    Get sync status for display on frontend (last updated, next update).
+    Returns timestamps that can be used to calculate relative times.
+    """
+    from database.sync_state import sync_state
+    
+    sync_info = await sync_state.get_state()
+    
+    last_sync = None
+    next_sync = None
+    
+    if sync_info.get("last_sync"):
+        last_sync = sync_info["last_sync"].get("completed_at")
+        next_sync = sync_info["last_sync"].get("next_sync_at")
+    
+    return {
+        "last_updated": last_sync,
+        "next_update": next_sync
+    }
+
+
 @app.post("/admin/sync")
 @limiter.limit("1/hour")
 async def trigger_sync(request: Request):
@@ -513,13 +576,21 @@ async def trigger_sync(request: Request):
     Manually trigger a neighbourhood sync (admin endpoint).
     Rate limited to 1 request per hour.
     """
+    from database.sync_state import sync_state
+    
     try:
         logger.info("Manual sync triggered")
         await run_sync_async(db_client)
+        
+        # Set next sync time after manual sync
+        next_sync = datetime.now() + timedelta(days=sync_interval_days)
+        await sync_state.set_next_sync(next_sync)
+        
         neighbourhood_count = db_client.get_neighbourhood_count()
         return {
             "status": "success",
-            "message": f"Sync completed. {neighbourhood_count} neighbourhoods in database."
+            "message": f"Sync completed. {neighbourhood_count} neighbourhoods in database.",
+            "next_sync": next_sync.isoformat()
         }
     except Exception as e:
         logger.error(f"Error during manual sync: {e}")
