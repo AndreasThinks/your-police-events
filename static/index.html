@@ -169,6 +169,28 @@
             font-size: 20px;
         }
         
+        .neighbourhood-info {
+            margin-bottom: 15px;
+        }
+        
+        .neighbourhood-link {
+            color: #1e40af;
+            text-decoration: none;
+            font-weight: 600;
+            transition: opacity 0.3s;
+        }
+        
+        .neighbourhood-link:hover {
+            opacity: 0.8;
+            text-decoration: underline;
+        }
+        
+        .neighbourhood-link i {
+            font-size: 12px;
+            margin-left: 4px;
+            opacity: 0.7;
+        }
+        
         .event-count {
             display: inline-block;
             padding: 6px 12px;
@@ -523,7 +545,7 @@
             
             <div class="result" id="result">
                 <h2>Your Calendar Feed</h2>
-                <p><strong>Neighbourhood:</strong> <span id="neighbourhoodName"></span></p>
+                <p class="neighbourhood-info"><strong>Neighbourhood:</strong> <span id="neighbourhoodName"></span></p>
                 <span class="event-count" id="eventCount"></span>
                 
                 <h3 style="color: #1e40af; margin-bottom: 15px; font-size: 18px;">Subscribe to Calendar:</h3>
@@ -608,8 +630,9 @@
                             throw new Error(data.detail || 'Failed to find neighbourhood');
                         }
                         
-                        // Show result (same as postcode lookup)
-                        document.getElementById('neighbourhoodName').textContent = data.neighbourhood_name;
+                        // Show result with neighbourhood link
+                        const neighbourhoodUrl = `https://www.police.uk/pu/your-area/${data.force_id}/${data.neighbourhood_id}/`;
+                        document.getElementById('neighbourhoodName').innerHTML = `<a href="${neighbourhoodUrl}" target="_blank" rel="noopener noreferrer" class="neighbourhood-link">${data.neighbourhood_name}<i class="fas fa-external-link-alt"></i></a>`;
                         document.getElementById('calendarUrl').textContent = data.calendar_url;
                         
                         // Generate subscription buttons
@@ -716,8 +739,9 @@
                     throw new Error(data.detail || 'Failed to find neighbourhood');
                 }
                 
-                // Show result
-                document.getElementById('neighbourhoodName').textContent = data.neighbourhood_name;
+                // Show result with neighbourhood link
+                const neighbourhoodUrl = `https://www.police.uk/pu/your-area/${data.force_id}/${data.neighbourhood_id}/`;
+                document.getElementById('neighbourhoodName').innerHTML = `<a href="${neighbourhoodUrl}" target="_blank" rel="noopener noreferrer" class="neighbourhood-link">${data.neighbourhood_name}<i class="fas fa-external-link-alt"></i></a>`;
                 document.getElementById('calendarUrl').textContent = data.calendar_url;
                 
                 // Generate subscription buttons
