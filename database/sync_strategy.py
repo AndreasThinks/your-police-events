@@ -61,12 +61,23 @@ def determine_sync_strategy(db_client: DuckDBClient) -> SyncStrategy:
     if metadata['last_sync_started'] and not metadata['last_sync_completed']:
         logger.warning("Incomplete sync detected - sync started but never completed")
         failed_forces = db_client.get_failed_forces()
-        return SyncStrategy(
-            sync_type="recovery",
-            delay_minutes=5,
-            force_ids=failed_forces,
-            reason="Incomplete sync detected (crash during sync)"
-        )
+        
+        if failed_forces:
+            logger.info(f"Will recover {len(failed_forces)} forces: {failed_forces}")
+            return SyncStrategy(
+                sync_type="recovery",
+                delay_minutes=5,
+                force_ids=failed_forces,
+                reason="Incomplete sync detected (crash during sync)"
+            )
+        else:
+            # No specific forces identified - do full sync as fallback
+            logger.warning("Incomplete sync detected but no failed forces tracked - doing full sync")
+            return SyncStrategy(
+                sync_type="full",
+                delay_minutes=5,
+                reason="Incomplete sync detected (no force tracking - full sync fallback)"
+            )
     
     # Case 4: Detect corrupted state (completion before start - impossible)
     if (metadata['last_sync_completed'] and metadata['last_sync_started'] and

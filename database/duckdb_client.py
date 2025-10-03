@@ -109,10 +109,16 @@ class DuckDBClient:
         
         # Convert boundary coordinates to WKT POLYGON format
         # Police UK API returns lat/lng (WGS84)
-        coords_str = ", ".join([
-            f"{coord['longitude']} {coord['latitude']}"
-            for coord in boundary_coords
-        ])
+        try:
+            coords_str = ", ".join([
+                f"{coord['longitude']} {coord['latitude']}"
+                for coord in boundary_coords
+            ])
+        except (KeyError, TypeError) as e:
+            logger.error(
+                f"Invalid coordinate format for {force_id}/{neighbourhood_id}: {e}"
+            )
+            return
         
         # Close the polygon by adding first point at the end if needed
         first_coord = boundary_coords[0]
@@ -124,7 +130,35 @@ class DuckDBClient:
         wkt = f"POLYGON(({coords_str}))"
         
         try:
-            # Use INSERT OR REPLACE to update if exists
+            # First, validate the geometry to prevent segfaults
+            validation_result = self.conn.execute("""
+                SELECT ST_IsValid(ST_GeomFromText(?)) as is_valid,
+                       ST_IsValidReason(ST_GeomFromText(?)) as reason
+            """, [wkt, wkt]).fetchone()
+            
+            if not validation_result or not validation_result[0]:
+                reason = validation_result[1] if validation_result else "Unknown"
+                logger.warning(
+                    f"Invalid geometry for {force_id}/{neighbourhood_id}: {reason}. "
+                    f"Attempting to fix with ST_MakeValid..."
+                )
+                
+                # Try to fix the geometry
+                try:
+                    self.conn.execute("""
+                        INSERT OR REPLACE INTO neighbourhoods 
+                        (force_id, neighbourhood_id, name, boundary, updated_at)
+                        VALUES (?, ?, ?, ST_MakeValid(ST_GeomFromText(?)), CURRENT_TIMESTAMP)
+                    """, [force_id, neighbourhood_id, name, wkt])
+                    logger.info(f"Fixed and inserted neighbourhood {force_id}/{neighbourhood_id}")
+                    return
+                except Exception as fix_error:
+                    logger.error(
+                        f"Could not fix geometry for {force_id}/{neighbourhood_id}: {fix_error}. Skipping."
+                    )
+                    return
+            
+            # Geometry is valid, insert normally
             self.conn.execute("""
                 INSERT OR REPLACE INTO neighbourhoods 
                 (force_id, neighbourhood_id, name, boundary, updated_at)
@@ -132,11 +166,14 @@ class DuckDBClient:
             """, [force_id, neighbourhood_id, name, wkt])
             
             logger.debug(f"Inserted neighbourhood {force_id}/{neighbourhood_id}")
+            
         except Exception as e:
             logger.error(
-                f"Error inserting neighbourhood {force_id}/{neighbourhood_id}: {e}"
+                f"Error inserting neighbourhood {force_id}/{neighbourhood_id}: {type(e).__name__}: {e}. "
+                f"This neighbourhood will be skipped."
             )
-            raise
+            # Don't raise - just skip this neighbourhood and continue
+            return
     
     def find_neighbourhood_by_coords(
         self, longitude: float, latitude: float
@@ -334,8 +371,14 @@ class DuckDBClient:
             raise
     
     def get_failed_forces(self) -> List[str]:
-        """Get list of forces that failed in last sync."""
+        """
+        Get list of forces that failed in last sync or are stuck in running state.
+        Includes forces with status 'failed', 'partial', or 'running' for > 2 hours.
+        """
         try:
+            from datetime import datetime, timedelta
+            
+            # Get forces that explicitly failed or partially succeeded
             results = self.conn.execute("""
                 SELECT force_id
                 FROM force_sync_status
@@ -343,7 +386,28 @@ class DuckDBClient:
                 ORDER BY force_id
             """).fetchall()
             
-            return [row[0] for row in results]
+            failed_forces = [row[0] for row in results]
+            
+            # Also get forces stuck in 'running' state for > 2 hours (stale locks)
+            two_hours_ago = datetime.now() - timedelta(hours=2)
+            stale_results = self.conn.execute("""
+                SELECT force_id
+                FROM force_sync_status
+                WHERE sync_status = 'running'
+                  AND last_sync_started < ?
+                  AND (last_sync_completed IS NULL OR last_sync_completed < last_sync_started)
+                ORDER BY force_id
+            """, [two_hours_ago]).fetchall()
+            
+            stale_forces = [row[0] for row in stale_results]
+            
+            if stale_forces:
+                logger.info(f"Found {len(stale_forces)} forces stuck in 'running' state: {stale_forces}")
+            
+            # Combine and deduplicate
+            all_failed = list(set(failed_forces + stale_forces))
+            return sorted(all_failed)
+            
         except Exception as e:
             logger.error(f"Error getting failed forces: {e}")
             return []
