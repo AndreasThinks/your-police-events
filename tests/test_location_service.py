@@ -119,6 +119,6 @@ def test_find_neighbourhood_by_coords(temp_db, sample_boundary_coords):
     result = service.find_neighbourhood_by_coords(-1.1457, 52.6390)
     
     assert result is not None
-    force_id, neighbourhood_id, name = result
+    force_id, neighbourhood_id, name, force_url_slug, neighbourhood_url_slug = result
     assert force_id == "test-force"
     assert neighbourhood_id == "TEST01"

@@ -144,21 +144,14 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
                         force_id, neighbourhood_id
                     )
                     
-                    # Extract URL slugs from details
+                    # Extract URL from details - store the full URL as provided by the API
                     force_url_slug = None
                     neighbourhood_url_slug = None
                     if details:
-                        # The API returns full URLs, we need to extract just the slug
-                        url_force = details.get('url_force', '')
-                        if url_force:
-                            # Extract slug from URL like: https://www.met.police.uk/area/your-area/met/Westminster/St-James's
-                            # We want just the last part after the final /
-                            parts = url_force.rstrip('/').split('/')
-                            if len(parts) > 0:
-                                force_url_slug = parts[-1].lower()
-                        
-                        # The neighbourhood URL slug is in the 'id' field
-                        neighbourhood_url_slug = details.get('id', '').lower() if details.get('id') else None
+                        # Store the full URL from the API (e.g., https://www.met.police.uk/area/your-area/met/Westminster/Pimlico-North)
+                        force_url_slug = details.get('url_force')
+                        # Store the neighbourhood ID for reference
+                        neighbourhood_url_slug = details.get('id')
                     
                     # Get boundary for this neighbourhood
                     boundary = await police_client.get_neighbourhood_boundary(

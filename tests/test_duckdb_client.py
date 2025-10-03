@@ -41,7 +41,7 @@ def test_find_neighbourhood_by_coords(temp_db, sample_boundary_coords):
     result = temp_db.find_neighbourhood_by_coords(-1.1457, 52.6390)
     
     assert result is not None
-    force_id, neighbourhood_id, name = result
+    force_id, neighbourhood_id, name, force_url_slug, neighbourhood_url_slug = result
     assert force_id == "leicestershire"
     assert neighbourhood_id == "NC04"
     assert name == "City Centre"
@@ -100,7 +100,7 @@ def test_insert_or_replace_neighbourhood(temp_db, sample_boundary_coords):
     # Name should be updated
     result = temp_db.find_neighbourhood_by_coords(-1.1457, 52.6390)
     assert result is not None
-    _, _, name = result
+    _, _, name, _, _ = result
     assert name == "Updated Name"
 
 
