@@ -34,6 +34,31 @@ class DuckDBClient:
     
     def initialize_schema(self):
         """Create the neighbourhoods table if it doesn't exist."""
+        
+        # Check if table exists and needs migration for URL slug columns
+        try:
+            result = self.conn.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'neighbourhoods'
+            """).fetchall()
+            
+            existing_columns = [row[0] for row in result]
+            
+            # If table exists but missing new columns, drop and recreate
+            if existing_columns and 'force_url_slug' not in existing_columns:
+                logger.warning(
+                    "Detected old schema without URL slug columns. "
+                    "Dropping and recreating neighbourhoods table for schema migration..."
+                )
+                self.conn.execute("DROP TABLE IF EXISTS neighbourhoods")
+                logger.info("Old neighbourhoods table dropped. Creating new schema with URL slug columns...")
+        
+        except Exception as e:
+            # Table might not exist yet, which is fine
+            logger.debug(f"Schema check (table may not exist yet): {e}")
+        
+        # Create table with new schema
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS neighbourhoods (
                 force_id VARCHAR,
