@@ -238,6 +238,7 @@ setup_monitoring()
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 
 # Pydantic models
