@@ -21,7 +21,7 @@ class LocationService:
     
     async def find_neighbourhood_by_postcode(
         self, postcode: str
-    ) -> Optional[Tuple[str, str, str]]:
+    ) -> Optional[Tuple[str, str, str, str, str]]:
         """
         Find the police neighbourhood for a given postcode.
         
@@ -29,7 +29,7 @@ class LocationService:
             postcode: UK postcode (e.g., "SW1A 1AA")
             
         Returns:
-            Tuple of (force_id, neighbourhood_id, neighbourhood_name) or None
+            Tuple of (force_id, neighbourhood_id, neighbourhood_name, force_url_slug, neighbourhood_url_slug) or None
         """
         # Check cache first
         cache_key = postcode.upper().replace(" ", "")
@@ -72,7 +72,7 @@ class LocationService:
             )
             
             if neighbourhood:
-                force_id, neighbourhood_id, name = neighbourhood
+                force_id, neighbourhood_id, name, force_url_slug, neighbourhood_url_slug = neighbourhood
                 logger.info(
                     f"Found neighbourhood: {name} ({force_id}/{neighbourhood_id})"
                 )
@@ -94,7 +94,7 @@ class LocationService:
     
     def find_neighbourhood_by_coords(
         self, longitude: float, latitude: float
-    ) -> Optional[Tuple[str, str, str]]:
+    ) -> Optional[Tuple[str, str, str, str, str]]:
         """
         Find the police neighbourhood for given WGS84 coordinates.
         
@@ -103,7 +103,7 @@ class LocationService:
             latitude: Latitude in WGS84
             
         Returns:
-            Tuple of (force_id, neighbourhood_id, neighbourhood_name) or None
+            Tuple of (force_id, neighbourhood_id, neighbourhood_name, force_url_slug, neighbourhood_url_slug) or None
         """
         try:
             neighbourhood = self.db_client.find_neighbourhood_by_coords(
@@ -111,7 +111,7 @@ class LocationService:
             )
             
             if neighbourhood:
-                force_id, neighbourhood_id, name = neighbourhood
+                force_id, neighbourhood_id, name, force_url_slug, neighbourhood_url_slug = neighbourhood
                 logger.info(
                     f"Found neighbourhood: {name} ({force_id}/{neighbourhood_id})"
                 )

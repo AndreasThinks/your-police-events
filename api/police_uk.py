@@ -150,6 +150,27 @@ class PoliceUKClient:
         )
         return result if result is not None else []
     
+    async def get_neighbourhood_details(
+        self, force_id: str, neighbourhood_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get detailed information for a neighbourhood including URL slugs.
+        
+        Args:
+            force_id: Police force identifier
+            neighbourhood_id: Neighbourhood identifier
+            
+        Returns:
+            Dict with neighbourhood details including 'url_force' field, or None on failure
+        """
+        try:
+            response = await self.client.get(f"{BASE_URL}/{force_id}/{neighbourhood_id}")
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error fetching details for {force_id}/{neighbourhood_id}: {e}")
+            return None
+    
     async def get_neighbourhood_boundary(
         self, force_id: str, neighbourhood_id: str
     ) -> List[Dict[str, str]]:

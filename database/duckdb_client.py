@@ -39,6 +39,8 @@ class DuckDBClient:
                 force_id VARCHAR,
                 neighbourhood_id VARCHAR,
                 name VARCHAR,
+                force_url_slug VARCHAR,
+                neighbourhood_url_slug VARCHAR,
                 boundary GEOMETRY,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (force_id, neighbourhood_id)
@@ -90,7 +92,9 @@ class DuckDBClient:
         force_id: str,
         neighbourhood_id: str,
         name: str,
-        boundary_coords: List[Dict[str, str]]
+        boundary_coords: List[Dict[str, str]],
+        force_url_slug: Optional[str] = None,
+        neighbourhood_url_slug: Optional[str] = None
     ):
         """
         Insert or update a neighbourhood with its boundary polygon.
@@ -100,6 +104,8 @@ class DuckDBClient:
             neighbourhood_id: Neighbourhood identifier
             name: Neighbourhood name
             boundary_coords: List of dicts with 'latitude' and 'longitude' keys
+            force_url_slug: URL-friendly force slug (optional)
+            neighbourhood_url_slug: URL-friendly neighbourhood slug (optional)
         """
         if not boundary_coords:
             logger.warning(
@@ -132,14 +138,12 @@ class DuckDBClient:
         try:
             # First, validate the geometry to prevent segfaults
             validation_result = self.conn.execute("""
-                SELECT ST_IsValid(ST_GeomFromText(?)) as is_valid,
-                       ST_IsValidReason(ST_GeomFromText(?)) as reason
-            """, [wkt, wkt]).fetchone()
+                SELECT ST_IsValid(ST_GeomFromText(?)) as is_valid
+            """, [wkt]).fetchone()
             
             if not validation_result or not validation_result[0]:
-                reason = validation_result[1] if validation_result else "Unknown"
                 logger.warning(
-                    f"Invalid geometry for {force_id}/{neighbourhood_id}: {reason}. "
+                    f"Invalid geometry for {force_id}/{neighbourhood_id}. "
                     f"Attempting to fix with ST_MakeValid..."
                 )
                 
@@ -147,9 +151,9 @@ class DuckDBClient:
                 try:
                     self.conn.execute("""
                         INSERT OR REPLACE INTO neighbourhoods 
-                        (force_id, neighbourhood_id, name, boundary, updated_at)
-                        VALUES (?, ?, ?, ST_MakeValid(ST_GeomFromText(?)), CURRENT_TIMESTAMP)
-                    """, [force_id, neighbourhood_id, name, wkt])
+                        (force_id, neighbourhood_id, name, force_url_slug, neighbourhood_url_slug, boundary, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ST_MakeValid(ST_GeomFromText(?)), CURRENT_TIMESTAMP)
+                    """, [force_id, neighbourhood_id, name, force_url_slug, neighbourhood_url_slug, wkt])
                     logger.info(f"Fixed and inserted neighbourhood {force_id}/{neighbourhood_id}")
                     return
                 except Exception as fix_error:
@@ -161,9 +165,9 @@ class DuckDBClient:
             # Geometry is valid, insert normally
             self.conn.execute("""
                 INSERT OR REPLACE INTO neighbourhoods 
-                (force_id, neighbourhood_id, name, boundary, updated_at)
-                VALUES (?, ?, ?, ST_GeomFromText(?), CURRENT_TIMESTAMP)
-            """, [force_id, neighbourhood_id, name, wkt])
+                (force_id, neighbourhood_id, name, force_url_slug, neighbourhood_url_slug, boundary, updated_at)
+                VALUES (?, ?, ?, ?, ?, ST_GeomFromText(?), CURRENT_TIMESTAMP)
+            """, [force_id, neighbourhood_id, name, force_url_slug, neighbourhood_url_slug, wkt])
             
             logger.debug(f"Inserted neighbourhood {force_id}/{neighbourhood_id}")
             
@@ -177,7 +181,7 @@ class DuckDBClient:
     
     def find_neighbourhood_by_coords(
         self, longitude: float, latitude: float
-    ) -> Optional[Tuple[str, str, str]]:
+    ) -> Optional[Tuple[str, str, str, str, str]]:
         """
         Find which neighbourhood contains the given coordinates.
         
@@ -186,11 +190,11 @@ class DuckDBClient:
             latitude: Latitude in WGS84
             
         Returns:
-            Tuple of (force_id, neighbourhood_id, name) or None if not found
+            Tuple of (force_id, neighbourhood_id, name, force_url_slug, neighbourhood_url_slug) or None if not found
         """
         try:
             result = self.conn.execute("""
-                SELECT force_id, neighbourhood_id, name
+                SELECT force_id, neighbourhood_id, name, force_url_slug, neighbourhood_url_slug
                 FROM neighbourhoods
                 WHERE ST_Contains(boundary, ST_Point(?, ?))
                 LIMIT 1

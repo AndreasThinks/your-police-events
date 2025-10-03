@@ -139,6 +139,19 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
                 stats["neighbourhoods_processed"] += 1
                 
                 try:
+                    # Get neighbourhood details to extract URL slugs
+                    details = await police_client.get_neighbourhood_details(
+                        force_id, neighbourhood_id
+                    )
+                    
+                    # Extract URL slugs from details
+                    force_url_slug = None
+                    neighbourhood_url_slug = None
+                    if details:
+                        force_url_slug = details.get('url_force')
+                        # The neighbourhood URL slug is in the 'id' field of the details response
+                        neighbourhood_url_slug = details.get('id')
+                    
                     # Get boundary for this neighbourhood
                     boundary = await police_client.get_neighbourhood_boundary(
                         force_id, neighbourhood_id
@@ -146,12 +159,14 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
                     
                     if boundary and len(boundary) > 0:
                         try:
-                            # Insert into database
+                            # Insert into database with URL slugs
                             db_client.insert_neighbourhood(
                                 force_id=force_id,
                                 neighbourhood_id=neighbourhood_id,
                                 name=neighbourhood_name,
-                                boundary_coords=boundary
+                                boundary_coords=boundary,
+                                force_url_slug=force_url_slug,
+                                neighbourhood_url_slug=neighbourhood_url_slug
                             )
                             stats["neighbourhoods_synced"] += 1
                             force_success += 1

@@ -95,7 +95,7 @@
         }
         
         input[type="text"] {
-            flex: 1;
+            width: 100%;
             padding: 12px;
             border: 2px solid #e0e0e0;
             border-radius: 5px;
@@ -108,16 +108,42 @@
             border-color: #3b82f6;
         }
         
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 25px 0;
+            color: #999;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .divider span {
+            padding: 0 15px;
+        }
+        
         .location-btn {
-            padding: 12px 20px;
+            width: 100%;
+            padding: 14px 20px;
             background: #28a745;
             color: white;
             border: none;
             border-radius: 5px;
             font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
             transition: background 0.3s;
-            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
         
         .location-btn:hover {
@@ -127,6 +153,10 @@
         .location-btn:disabled {
             background: #ccc;
             cursor: not-allowed;
+        }
+        
+        .location-btn i {
+            font-size: 18px;
         }
         
         button {
@@ -520,22 +550,25 @@
             <form id="postcodeForm">
                 <div class="input-group">
                     <label for="postcode">Enter Your Postcode</label>
-                    <div class="input-wrapper">
-                        <input 
-                            type="text" 
-                            id="postcode" 
-                            name="postcode" 
-                            placeholder="e.g., SW1A 1AA"
-                            required
-                        >
-                        <button type="button" class="location-btn" id="locationBtn" title="Use my location">
-                            Use Location
-                        </button>
-                    </div>
+                    <input 
+                        type="text" 
+                        id="postcode" 
+                        name="postcode" 
+                        placeholder="e.g., SW1A 1AA"
+                        required
+                    >
                 </div>
                 
                 <button type="submit" id="submitBtn">Find My Calendar</button>
             </form>
+            
+            <div class="divider">
+                <span>OR</span>
+            </div>
+            
+            <button type="button" class="location-btn" id="locationBtn">
+                <i class="fas fa-location-dot"></i> Use My Current Location
+            </button>
             
             <div class="loading" id="loading">
                 <p id="loadingMessage">Finding your neighbourhood...</p>
@@ -545,7 +578,11 @@
             
             <div class="result" id="result">
                 <h2>Your Calendar Feed</h2>
-                <p class="neighbourhood-info"><strong>Neighbourhood:</strong> <span id="neighbourhoodName"></span></p>
+                <p class="neighbourhood-info">
+                    <strong>Your Neighbourhood Policing Team:</strong> <span id="neighbourhoodName"></span>
+                    <br>
+                    <small style="color: #666; font-size: 13px;">Click the link above to visit your team's page on Police.uk</small>
+                </p>
                 <span class="event-count" id="eventCount"></span>
                 
                 <h3 style="color: #1e40af; margin-bottom: 15px; font-size: 18px;">Subscribe to Calendar:</h3>
@@ -598,7 +635,7 @@
             }
             
             locationBtn.disabled = true;
-            locationBtn.textContent = 'Getting location...';
+            locationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Getting location...';
             error.classList.remove('show');
             result.classList.remove('show');
             loading.classList.add('show');
@@ -693,7 +730,7 @@
                         loading.classList.remove('show');
                     } finally {
                         locationBtn.disabled = false;
-                        locationBtn.textContent = 'Use Location';
+                        locationBtn.innerHTML = '<i class="fas fa-location-dot"></i> Use My Current Location';
                     }
                 },
                 (err) => {
@@ -703,7 +740,7 @@
                     error.classList.add('show');
                     loading.classList.remove('show');
                     locationBtn.disabled = false;
-                    locationBtn.textContent = 'Use Location';
+                    locationBtn.innerHTML = '<i class="fas fa-location-dot"></i> Use My Current Location';
                 }
             );
         });

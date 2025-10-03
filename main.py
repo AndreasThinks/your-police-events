@@ -263,6 +263,8 @@ class PostcodeLookupResponse(BaseModel):
     force_id: str
     neighbourhood_id: str
     neighbourhood_name: str
+    force_url_slug: str
+    neighbourhood_url_slug: str
     calendar_url: str
     event_count: int
     preview_events: list[EventPreview]
@@ -277,8 +279,26 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for Railway."""
+    """
+    Health check endpoint for Railway.
+    Returns 503 if INITIAL_SYNC is enabled but database is empty.
+    This ensures Railway waits for initial sync to complete before marking deployment as ready.
+    """
     neighbourhood_count = db_client.get_neighbourhood_count()
+    initial_sync_required = os.getenv("INITIAL_SYNC", "false").lower() == "true"
+    
+    # If initial sync is required but database is empty, report unhealthy
+    if initial_sync_required and neighbourhood_count == 0:
+        return Response(
+            content=json.dumps({
+                "status": "syncing",
+                "neighbourhoods": 0,
+                "message": "Initial sync in progress - deployment will be ready once sync completes"
+            }),
+            status_code=503,
+            media_type="application/json"
+        )
+    
     return {
         "status": "healthy",
         "neighbourhoods": neighbourhood_count
@@ -315,7 +335,7 @@ async def lookup_postcode(postcode_request: PostcodeLookupRequest, request: Requ
             detail = get_neighbourhood_not_found_message(postcode)
             raise HTTPException(status_code=404, detail=detail)
         
-        force_id, neighbourhood_id, neighbourhood_name = result
+        force_id, neighbourhood_id, neighbourhood_name, force_url_slug, neighbourhood_url_slug = result
         
         # Generate calendar URL
         base_url = str(request.base_url).rstrip('/')
@@ -368,6 +388,8 @@ async def lookup_postcode(postcode_request: PostcodeLookupRequest, request: Requ
             force_id=force_id,
             neighbourhood_id=neighbourhood_id,
             neighbourhood_name=neighbourhood_name,
+            force_url_slug=force_url_slug,
+            neighbourhood_url_slug=neighbourhood_url_slug,
             calendar_url=calendar_url,
             event_count=event_count,
             preview_events=preview_events
@@ -408,7 +430,7 @@ async def lookup_coordinates(coords_request: CoordinateLookupRequest, request: R
                 detail="No police neighbourhood found at these coordinates. The area may not have neighbourhood policing data available."
             )
         
-        force_id, neighbourhood_id, neighbourhood_name = result
+        force_id, neighbourhood_id, neighbourhood_name, force_url_slug, neighbourhood_url_slug = result
         
         # Generate calendar URL
         base_url = str(request.base_url).rstrip('/')
@@ -457,6 +479,8 @@ async def lookup_coordinates(coords_request: CoordinateLookupRequest, request: R
             force_id=force_id,
             neighbourhood_id=neighbourhood_id,
             neighbourhood_name=neighbourhood_name,
+            force_url_slug=force_url_slug,
+            neighbourhood_url_slug=neighbourhood_url_slug,
             calendar_url=calendar_url,
             event_count=event_count,
             preview_events=preview_events
