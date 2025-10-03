@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Your Police Events</title>
     
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    
     <!-- Favicon with theme support -->
     <link rel="icon" href="/assets/local_police_favicon_light.ico" media="(prefers-color-scheme: light)">
     <link rel="icon" href="/assets/local_police_favicon_dark.ico" media="(prefers-color-scheme: dark)">
@@ -20,7 +23,7 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             line-height: 1.6;
             color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
             min-height: 100vh;
             padding: 20px;
             display: flex;
@@ -41,7 +44,7 @@
         }
         
         h1 {
-            color: #667eea;
+            color: #1e40af;
             margin-bottom: 10px;
             font-size: 32px;
             font-weight: 700;
@@ -65,7 +68,7 @@
         }
         
         .intro-text a {
-            color: #667eea;
+            color: #1e40af;
             text-decoration: none;
             font-weight: 600;
         }
@@ -102,7 +105,7 @@
         
         input[type="text"]:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #3b82f6;
         }
         
         .location-btn {
@@ -129,7 +132,7 @@
         button {
             width: 100%;
             padding: 14px;
-            background: #667eea;
+            background: #1e40af;
             color: white;
             border: none;
             border-radius: 5px;
@@ -140,7 +143,7 @@
         }
         
         button:hover {
-            background: #5568d3;
+            background: #1e3a8a;
         }
         
         button:disabled {
@@ -161,7 +164,7 @@
         }
         
         .result h2 {
-            color: #667eea;
+            color: #1e40af;
             margin-bottom: 15px;
             font-size: 20px;
         }
@@ -202,10 +205,10 @@
         }
         
         .subscribe-buttons {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            display: flex;
             gap: 10px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
         
         .subscribe-btn {
@@ -222,7 +225,8 @@
             justify-content: center;
             gap: 8px;
             color: white;
-            width: 100%;
+            flex: 1;
+            min-width: 180px;
         }
         
         .subscribe-btn:hover {
@@ -259,7 +263,7 @@
         }
         
         .events-preview h3 {
-            color: #667eea;
+            color: #1e40af;
             margin-bottom: 15px;
             font-size: 18px;
         }
@@ -269,7 +273,7 @@
             padding: 15px;
             border-radius: 5px;
             margin-bottom: 12px;
-            border-left: 4px solid #667eea;
+            border-left: 4px solid #3b82f6;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
@@ -280,7 +284,7 @@
         }
         
         .event-date {
-            color: #667eea;
+            color: #1e40af;
             font-size: 14px;
             font-weight: 600;
             margin-bottom: 5px;
@@ -308,15 +312,15 @@
         .instructions {
             margin-top: 20px;
             padding: 15px;
-            background: #e7f3ff;
-            border-left: 4px solid #667eea;
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
             border-radius: 3px;
             font-size: 14px;
         }
         
         .instructions h3 {
             margin-bottom: 10px;
-            color: #667eea;
+            color: #1e40af;
         }
         
         .instructions ul {
@@ -342,7 +346,7 @@
         
         .loading {
             text-align: center;
-            color: #667eea;
+            color: #1e40af;
             margin-top: 15px;
             display: none;
         }
@@ -357,27 +361,41 @@
             padding: 20px;
             text-align: center;
             color: white;
-            font-size: 14px;
+            font-size: 13px;
         }
         
         footer a {
             color: white;
             text-decoration: none;
             font-weight: 600;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.5);
-            transition: border-color 0.3s;
+            transition: opacity 0.3s;
         }
         
         footer a:hover {
-            border-bottom-color: white;
+            opacity: 0.8;
         }
         
-        .footer-links {
-            margin-bottom: 10px;
+        .footer-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
         }
         
-        .footer-credit {
-            opacity: 0.9;
+        .github-icon {
+            font-size: 20px;
+            display: inline-block;
+        }
+        
+        .footer-separator {
+            opacity: 0.5;
+        }
+        
+        .footer-sync-status {
+            font-size: 12px;
+            opacity: 0.75;
         }
         
         /* Mobile Responsive Styles */
@@ -462,9 +480,9 @@
             <p class="subtitle">Follow local neighbourhood policing events in your calendar</p>
             
             <div class="intro-text">
-                Enter your postcode to get a calendar feed of upcoming events from your local neighbourhood policing team. 
-                The feed updates automatically with new events from the <a href="https://data.police.uk/" target="_blank" rel="noopener noreferrer">Police UK API</a>, 
-                so you'll always stay informed about community engagement opportunities in your area.
+                <strong>Did you know</strong> your local neighbourhood policing team regularly runs events open to the public? Many people don't!
+                <br><br>
+                I built this website to help you automatically keep track of these events and take an active part in keeping your community safe. Enter your postcode below to get a calendar feed that updates automatically with new events from the <a href="https://data.police.uk/" target="_blank" rel="noopener noreferrer">Police UK API</a>.
             </div>
             
             <form id="postcodeForm">
@@ -498,7 +516,7 @@
                 <p><strong>Neighbourhood:</strong> <span id="neighbourhoodName"></span></p>
                 <span class="event-count" id="eventCount"></span>
                 
-                <h3 style="color: #667eea; margin-bottom: 15px; font-size: 18px;">Subscribe to Calendar:</h3>
+                <h3 style="color: #1e40af; margin-bottom: 15px; font-size: 18px;">Subscribe to Calendar:</h3>
                 
                 <div class="subscribe-buttons" id="subscribeButtons">
                     <!-- Buttons will be dynamically generated -->
@@ -516,13 +534,14 @@
     </div>
     
     <footer>
-        <div class="footer-links">
-            <a href="https://github.com/AndreasThinks/your-police-events" target="_blank" rel="noopener noreferrer">GitHub Repository</a>
+        <div class="footer-content">
+            <a href="https://github.com/AndreasThinks/your-police-events" target="_blank" rel="noopener noreferrer" title="View on GitHub">
+                <i class="fab fa-github github-icon"></i>
+            </a>
+            <span class="footer-separator">•</span>
+            <span>Created by <a href="https://AndreasThinks.me" target="_blank" rel="noopener noreferrer">AndreasThinks</a></span>
         </div>
-        <div class="footer-credit">
-            A project by <a href="https://AndreasThinks.me" target="_blank" rel="noopener noreferrer">AndreasThinks</a> (and some vibes)
-        </div>
-        <div class="footer-sync-status" id="syncStatus" style="margin-top: 10px; font-size: 12px; opacity: 0.8;">
+        <div class="footer-sync-status" id="syncStatus">
             Loading sync status...
         </div>
     </footer>
