@@ -298,6 +298,35 @@ Note: Rate limited to 1 request per hour.
 
 ## Recent Improvements
 
+### Frontend Redesign & Automatic Scheduling (March 2025)
+
+#### Rebranding to "Your Police Events"
+- **New branding**: Clean, professional "Your Police Events" title
+- **Improved UX**: Clear subtitle explaining the service
+- **Educational content**: Introduction text with link to Police UK API
+- **Professional footer**: GitHub repository link and author attribution
+- **Theme-aware favicons**: Automatically adapts to light/dark system themes
+- **No emojis**: Clean, professional appearance suitable for public services
+
+#### Automatic Sync Scheduling
+- **APScheduler integration**: Background job scheduler for automatic updates
+- **Configurable interval**: Set sync frequency via `SYNC_INTERVAL_DAYS` environment variable
+- **Default weekly sync**: Automatically updates neighbourhood boundaries every 7 days
+- **Startup scheduling**: Calculates and tracks next sync time on application start
+- **Manual override**: Can still trigger manual syncs via `/admin/sync` endpoint
+
+#### Real-Time Sync Status Display
+- **New API endpoint**: `/api/sync-status` provides last updated and next update times
+- **Footer status display**: Discrete sync status shown at bottom of page
+- **Granular time formatting**: Smart relative time display
+  - Less than 1 minute: "just now" / "very soon"
+  - Less than 60 minutes: "X minutes ago" / "in X minutes"
+  - Less than 24 hours: "X hours ago" / "in X hours"
+  - 1-6 days: "X days ago" / "in X days"
+  - 7+ days: "X weeks ago" / "in X weeks"
+- **Auto-refresh**: Status updates every 60 seconds without page reload
+- **User transparency**: Users can see when data was last updated and when next update is expected
+
 ### Smart Sync System (October 2025)
 - **Intelligent startup decisions**: Automatically determines what sync is needed on startup
 - **Crash recovery**: Detects stale locks from crashed syncs and recovers automatically
