@@ -60,7 +60,12 @@ class StructuredFormatter(logging.Formatter):
         if hasattr(record, "extra_fields"):
             log_data.update(record.extra_fields)
         
-        return json.dumps(log_data)
+        result = json.dumps(log_data)
+        
+        # Force flush to ensure logs appear in Railway immediately
+        sys.stdout.flush()
+        
+        return result
 
 
 # Configure structured logging
