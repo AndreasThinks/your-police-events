@@ -686,8 +686,8 @@
                             throw new Error(data.detail || 'Failed to find neighbourhood');
                         }
                         
-                        // Show result with neighbourhood link
-                        const neighbourhoodUrl = `https://www.police.uk/pu/your-area/${data.force_id}/${data.neighbourhood_id}/`;
+                        // Show result with neighbourhood link - use the URL from the API
+                        const neighbourhoodUrl = data.force_url_slug || `https://www.police.uk/pu/your-area/${data.force_id}/${data.neighbourhood_id}/`;
                         document.getElementById('neighbourhoodName').innerHTML = `<a href="${neighbourhoodUrl}" target="_blank" rel="noopener noreferrer" class="neighbourhood-link">${data.neighbourhood_name}<i class="fas fa-external-link-alt"></i></a>`;
                         document.getElementById('calendarUrl').textContent = data.calendar_url;
                         
@@ -795,8 +795,8 @@
                     throw new Error(data.detail || 'Failed to find neighbourhood');
                 }
                 
-                // Show result with neighbourhood link
-                const neighbourhoodUrl = `https://www.police.uk/pu/your-area/${data.force_id}/${data.neighbourhood_id}/`;
+                // Show result with neighbourhood link - use the URL from the API
+                const neighbourhoodUrl = data.force_url_slug || `https://www.police.uk/pu/your-area/${data.force_id}/${data.neighbourhood_id}/`;
                 document.getElementById('neighbourhoodName').innerHTML = `<a href="${neighbourhoodUrl}" target="_blank" rel="noopener noreferrer" class="neighbourhood-link">${data.neighbourhood_name}<i class="fas fa-external-link-alt"></i></a>`;
                 document.getElementById('calendarUrl').textContent = data.calendar_url;
                 
