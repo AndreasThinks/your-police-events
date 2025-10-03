@@ -306,7 +306,17 @@
             text-align: center;
             padding: 20px;
             color: #666;
-            font-style: italic;
+            line-height: 1.6;
+        }
+        
+        .no-events a {
+            color: #1e40af;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .no-events a:hover {
+            text-decoration: underline;
         }
         
         .instructions {
@@ -645,7 +655,7 @@
                             });
                             eventsPreview.style.display = 'block';
                         } else if (data.event_count === 0) {
-                            eventsList.innerHTML = '<div class="no-events">No upcoming events scheduled</div>';
+                            eventsList.innerHTML = '<div class="no-events">It looks like your local team hasn\'t scheduled any events! If you\'d like, you can <a href="https://www.police.uk/pu/contact-us/find-force-local-policing-team/" target="_blank" rel="noopener noreferrer">contact them</a> to encourage them to host one.</div>';
                             eventsPreview.style.display = 'block';
                         }
                         
@@ -753,7 +763,7 @@
                     });
                     eventsPreview.style.display = 'block';
                 } else if (data.event_count === 0) {
-                    eventsList.innerHTML = '<div class="no-events">No upcoming events scheduled</div>';
+                    eventsList.innerHTML = '<div class="no-events">It looks like your local team hasn\'t scheduled any events! If you\'d like, you can <a href="https://www.police.uk/pu/contact-us/find-force-local-policing-team/" target="_blank" rel="noopener noreferrer">contact them</a> to encourage them to host one.</div>';
                     eventsPreview.style.display = 'block';
                 }
                 
