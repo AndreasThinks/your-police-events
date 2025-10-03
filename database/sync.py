@@ -138,25 +138,47 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
                 neighbourhood_name = neighbourhood['name']
                 stats["neighbourhoods_processed"] += 1
                 
-                # Get boundary for this neighbourhood
-                boundary = await police_client.get_neighbourhood_boundary(
-                    force_id, neighbourhood_id
-                )
-                
-                if boundary and len(boundary) > 0:
-                    try:
-                        # Insert into database
-                        db_client.insert_neighbourhood(
-                            force_id=force_id,
-                            neighbourhood_id=neighbourhood_id,
-                            name=neighbourhood_name,
-                            boundary_coords=boundary
+                try:
+                    # Get boundary for this neighbourhood
+                    boundary = await police_client.get_neighbourhood_boundary(
+                        force_id, neighbourhood_id
+                    )
+                    
+                    if boundary and len(boundary) > 0:
+                        try:
+                            # Insert into database
+                            db_client.insert_neighbourhood(
+                                force_id=force_id,
+                                neighbourhood_id=neighbourhood_id,
+                                name=neighbourhood_name,
+                                boundary_coords=boundary
+                            )
+                            stats["neighbourhoods_synced"] += 1
+                            force_success += 1
+                        except Exception as e:
+                            logger.error(
+                                f"Database error for {force_id}/{neighbourhood_id}: {e}"
+                            )
+                            stats["neighbourhoods_failed"] += 1
+                            force_failed += 1
+                            stats["failed_neighbourhoods"].append({
+                                "force_id": force_id,
+                                "neighbourhood_id": neighbourhood_id,
+                                "name": neighbourhood_name,
+                                "reason": f"Database error: {e}"
+                            })
+                    elif boundary is not None and len(boundary) == 0:
+                        # Empty boundary (legitimate - some neighbourhoods don't have boundaries)
+                        logger.debug(
+                            f"No boundary data for {force_id}/{neighbourhood_id} ({neighbourhood_name})"
                         )
-                        stats["neighbourhoods_synced"] += 1
-                        force_success += 1
-                    except Exception as e:
-                        logger.error(
-                            f"Database error for {force_id}/{neighbourhood_id}: {e}"
+                        stats["neighbourhoods_no_boundary"] += 1
+                        force_no_boundary += 1
+                    else:
+                        # Failed to fetch boundary after retries
+                        logger.warning(
+                            f"Failed to fetch boundary for {force_id}/{neighbourhood_id} "
+                            f"({neighbourhood_name}) after retries"
                         )
                         stats["neighbourhoods_failed"] += 1
                         force_failed += 1
@@ -164,20 +186,13 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
                             "force_id": force_id,
                             "neighbourhood_id": neighbourhood_id,
                             "name": neighbourhood_name,
-                            "reason": f"Database error: {e}"
+                            "reason": "Failed to fetch boundary after retries"
                         })
-                elif boundary is not None and len(boundary) == 0:
-                    # Empty boundary (legitimate - some neighbourhoods don't have boundaries)
-                    logger.debug(
-                        f"No boundary data for {force_id}/{neighbourhood_id} ({neighbourhood_name})"
-                    )
-                    stats["neighbourhoods_no_boundary"] += 1
-                    force_no_boundary += 1
-                else:
-                    # Failed to fetch boundary after retries
-                    logger.warning(
-                        f"Failed to fetch boundary for {force_id}/{neighbourhood_id} "
-                        f"({neighbourhood_name}) after retries"
+                except Exception as e:
+                    # Catch any unexpected errors for this neighbourhood
+                    logger.error(
+                        f"Unexpected error processing {force_id}/{neighbourhood_id} "
+                        f"({neighbourhood_name}): {type(e).__name__}: {e}"
                     )
                     stats["neighbourhoods_failed"] += 1
                     force_failed += 1
@@ -185,8 +200,10 @@ async def sync_all_neighbourhoods(db_client: DuckDBClient):
                         "force_id": force_id,
                         "neighbourhood_id": neighbourhood_id,
                         "name": neighbourhood_name,
-                        "reason": "Failed to fetch boundary after retries"
+                        "reason": f"Unexpected error: {type(e).__name__}: {e}"
                     })
+                    # Continue with next neighbourhood instead of crashing
+                    continue
                 
                 # Update progress periodically
                 if stats["neighbourhoods_processed"] % 10 == 0:

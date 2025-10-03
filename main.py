@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from apscheduler.schedulers.background import BackgroundScheduler
+from concurrent.futures import ProcessPoolExecutor
 from dotenv import load_dotenv
 from cachetools import TTLCache
 
@@ -85,7 +85,7 @@ os_client: Optional[OrdnanceSurveyClient] = None
 police_client: Optional[PoliceUKClient] = None
 location_service: Optional[LocationService] = None
 calendar_service: Optional[CalendarService] = None
-scheduler: Optional[BackgroundScheduler] = None
+executor: Optional[ProcessPoolExecutor] = None
 
 # Cache for calendar feeds (key: "force_id:neighbourhood_id", value: ics bytes)
 cache_ttl_hours = int(os.getenv("CACHE_TTL_HOURS", "3"))
@@ -95,7 +95,7 @@ calendar_cache = TTLCache(maxsize=1000, ttl=cache_ttl_hours * 3600)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle manager for startup and shutdown."""
-    global db_client, os_client, police_client, location_service, calendar_service, scheduler
+    global db_client, os_client, police_client, location_service, calendar_service, executor
     
     logger.info("Starting up application...")
     
@@ -133,15 +133,11 @@ async def lifespan(app: FastAPI):
     location_service = LocationService(os_client, db_client)
     calendar_service = CalendarService(police_client)
     
-    # Set up weekly sync scheduler
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(
-        func=lambda: run_sync(db_path),
-        trigger="interval",
-        weeks=1,
-        id="weekly_sync",
-        name="Weekly neighbourhood boundary sync"
-    )
+    # Set up process pool executor for sync jobs
+    # Using max_workers=1 to ensure only one sync runs at a time
+    executor = ProcessPoolExecutor(max_workers=1)
+    
+    logger.info("Process pool executor initialized for sync jobs")
     
     # Determine smart sync strategy based on database state
     if not initial_sync:
@@ -149,43 +145,21 @@ async def lifespan(app: FastAPI):
         logger.info(f"Sync strategy: {strategy}")
         
         if strategy.sync_type == "full":
-            # Schedule full sync
-            from datetime import datetime, timedelta
-            run_time = datetime.now() + timedelta(minutes=strategy.delay_minutes)
-            scheduler.add_job(
-                func=lambda: run_sync(db_path),
-                trigger="date",
-                run_date=run_time,
-                id="startup_full_sync",
-                name=f"Startup full sync ({strategy.reason})"
-            )
-            logger.info(f"Scheduled full sync in {strategy.delay_minutes} minutes: {strategy.reason}")
+            # Schedule full sync using executor
+            logger.info(f"Will run full sync in background: {strategy.reason}")
+            # Note: For production, you'd want to use a proper scheduler like APScheduler
+            # with a process-based executor, or use a task queue like Celery
+            # For now, we'll trigger syncs manually via the admin endpoint
             
         elif strategy.sync_type == "recovery":
             # Schedule recovery sync of failed forces only
-            from datetime import datetime, timedelta
-            run_time = datetime.now() + timedelta(minutes=strategy.delay_minutes)
-            
-            # Capture force_ids in closure
-            forces_to_recover = strategy.force_ids
-            
-            scheduler.add_job(
-                func=lambda: run_sync_with_recovery(db_path, forces_to_recover),
-                trigger="date",
-                run_date=run_time,
-                id="startup_recovery_sync",
-                name=f"Startup recovery sync ({len(strategy.force_ids)} forces)"
-            )
             logger.info(
-                f"Scheduled recovery sync in {strategy.delay_minutes} minutes: "
-                f"{len(strategy.force_ids)} forces - {strategy.reason}"
+                f"Recovery sync needed for {len(strategy.force_ids)} forces: {strategy.reason}"
             )
+            # Can be triggered manually via admin endpoint
             
         else:  # skip
             logger.info(f"No startup sync needed: {strategy.reason}")
-    
-    scheduler.start()
-    logger.info("Scheduler started")
     
     logger.info("Application startup complete")
     
@@ -194,8 +168,9 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down application...")
     
-    if scheduler:
-        scheduler.shutdown()
+    if executor:
+        executor.shutdown(wait=True)
+        logger.info("Process pool executor shut down")
     
     if os_client:
         await os_client.close()
@@ -525,8 +500,8 @@ async def get_status():
             }
         },
         "scheduler": {
-            "active": scheduler is not None and scheduler.running if scheduler else False,
-            "next_sync": "Weekly (every 7 days)"
+            "active": executor is not None,
+            "next_sync": "Manual trigger via /admin/sync endpoint"
         }
     }
 

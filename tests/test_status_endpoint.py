@@ -182,15 +182,16 @@ def test_status_endpoint_scheduler_info(mock_db_client, mock_sync_state):
     """Test that scheduler information is included."""
     with patch('main.db_client', mock_db_client):
         with patch('database.sync_state.sync_state', mock_sync_state):
-            client = TestClient(app)
-            response = client.get("/admin/status")
-            
-            data = response.json()
-            scheduler_info = data["scheduler"]
-            
-            assert "active" in scheduler_info
-            assert "next_sync" in scheduler_info
-            assert scheduler_info["next_sync"] == "Weekly (every 7 days)"
+            with patch('main.executor', Mock()):
+                client = TestClient(app)
+                response = client.get("/admin/status")
+                
+                data = response.json()
+                scheduler_info = data["scheduler"]
+                
+                assert "active" in scheduler_info
+                assert "next_sync" in scheduler_info
+                assert scheduler_info["next_sync"] == "Manual trigger via /admin/sync endpoint"
 
 
 def test_status_endpoint_no_database(mock_sync_state):
