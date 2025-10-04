@@ -439,10 +439,13 @@
         footer {
             max-width: 700px;
             margin: 30px auto 20px;
-            padding: 20px;
+            padding: 25px 30px;
             text-align: center;
             color: white;
             font-size: 13px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
         }
         
         footer a {
@@ -457,12 +460,16 @@
         }
         
         .footer-content {
+            display: block;
+            margin-bottom: 15px;
+        }
+        
+        .footer-credit {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 12px;
             flex-wrap: wrap;
-            margin-bottom: 8px;
         }
         
         .github-icon {
@@ -475,8 +482,17 @@
         }
         
         .footer-sync-status {
-            font-size: 12px;
-            opacity: 0.75;
+            font-size: 13px;
+            opacity: 0.85;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .sync-icon {
+            display: inline-block;
+            margin-right: 6px;
+            opacity: 0.8;
         }
         
         /* Mobile Responsive Styles */
@@ -535,7 +551,11 @@
             
             footer {
                 font-size: 13px;
-                padding: 15px;
+                padding: 20px 15px;
+            }
+            
+            .footer-sync-status {
+                font-size: 12px;
             }
         }
         
@@ -623,14 +643,16 @@
     
     <footer>
         <div class="footer-content">
-            <a href="https://github.com/AndreasThinks/your-police-events" target="_blank" rel="noopener noreferrer" title="View on GitHub">
-                <i class="fab fa-github github-icon"></i>
-            </a>
-            <span class="footer-separator">•</span>
-            <span>Created by <a href="https://AndreasThinks.me" target="_blank" rel="noopener noreferrer">AndreasThinks</a> with help from some <i>✨vibes✨</i></span>
-        </div>
-        <div class="footer-sync-status" id="syncStatus">
-            Loading sync status...
+            <div class="footer-credit">
+                <a href="https://github.com/AndreasThinks/your-police-events" target="_blank" rel="noopener noreferrer" title="View on GitHub">
+                    <i class="fab fa-github github-icon"></i>
+                </a>
+                <span class="footer-separator">•</span>
+                <span>Created by <a href="https://AndreasThinks.me" target="_blank" rel="noopener noreferrer">AndreasThinks</a> with help from some <i>✨vibes✨</i></span>
+            </div>
+            <div class="footer-sync-status" id="syncStatus">
+                <span class="sync-icon">🔄</span>Loading sync status...
+            </div>
         </div>
     </footer>
     
@@ -948,12 +970,12 @@
                 if (data.last_updated && data.next_update) {
                     const lastUpdated = formatRelativeTime(data.last_updated, true);
                     const nextUpdate = formatRelativeTime(data.next_update, false);
-                    syncStatusEl.textContent = `Data last updated: ${lastUpdated} | Next update: ${nextUpdate}`;
+                    syncStatusEl.innerHTML = `<span class="sync-icon">🔄</span>Neighbourhood boundary data: Last synced ${lastUpdated} • Next sync ${nextUpdate}`;
                 } else if (data.next_update) {
                     const nextUpdate = formatRelativeTime(data.next_update, false);
-                    syncStatusEl.textContent = `Next update: ${nextUpdate}`;
+                    syncStatusEl.innerHTML = `<span class="sync-icon">🔄</span>Neighbourhood boundary data: Next sync ${nextUpdate}`;
                 } else {
-                    syncStatusEl.textContent = 'Sync status unavailable';
+                    syncStatusEl.innerHTML = '<span class="sync-icon">🔄</span>Sync status unavailable';
                 }
             } catch (err) {
                 console.error('Failed to fetch sync status:', err);
