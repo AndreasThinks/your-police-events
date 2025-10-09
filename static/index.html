@@ -489,6 +489,10 @@
             font-size: 12px;
             opacity: 0.75;
             margin-top: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
         }
         
         .sync-icon, .stats-icon {
@@ -998,15 +1002,29 @@
                 const data = await response.json();
 
                 const statsEl = document.getElementById('appStats');
+                statsEl.innerHTML = ''; // Clear previous stats
 
-                if (data.visitor_count !== undefined && data.active_feeds !== undefined) {
-                    statsEl.innerHTML = `<span class="stats-icon">📊</span>${data.visitor_count.toLocaleString()} visitors • ${data.active_feeds.toLocaleString()} active calendar feeds`;
-                } else {
-                    statsEl.textContent = '';
+                if (data.visits_last_30_days !== undefined) {
+                    const monthlyVisitsEl = document.createElement('span');
+                    monthlyVisitsEl.innerHTML = `<span class="stats-icon">📈</span>${data.visits_last_30_days.toLocaleString()} visits (30 days)`;
+                    statsEl.appendChild(monthlyVisitsEl);
                 }
+
+                if (data.active_feeds !== undefined) {
+                    const activeFeedsEl = document.createElement('span');
+                    activeFeedsEl.innerHTML = `<span class="stats-icon">📡</span>${data.active_feeds.toLocaleString()} active feeds`;
+                    statsEl.appendChild(activeFeedsEl);
+                }
+
+                if (data.visitor_count !== undefined) {
+                    const totalVisitsEl = document.createElement('span');
+                    totalVisitsEl.innerHTML = `<span class="stats-icon">👥</span>${data.visitor_count.toLocaleString()} total visitors`;
+                    statsEl.appendChild(totalVisitsEl);
+                }
+
             } catch (err) {
                 console.error('Failed to fetch app stats:', err);
-                document.getElementById('appStats').textContent = '';
+                document.getElementById('appStats').textContent = 'Stats unavailable';
             }
         }
 

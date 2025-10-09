@@ -118,6 +118,14 @@ class DuckDBClient:
             );
         """)
 
+        # Create daily visits table for trend analysis
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS daily_visits (
+                visit_date DATE PRIMARY KEY,
+                visit_count BIGINT
+            );
+        """)
+
         logger.info("Database schema initialized")
     
     def insert_neighbourhood(
@@ -482,12 +490,12 @@ class DuckDBClient:
         If the metric doesn't exist, it's created with the increment value.
         """
         try:
-            self.conn.execute(f"""
+            self.conn.execute("""
                 INSERT INTO app_metrics (metric_name, metric_value)
-                VALUES ('{metric_name}', {increment_by})
+                VALUES (?, ?)
                 ON CONFLICT (metric_name)
-                DO UPDATE SET metric_value = app_metrics.metric_value + {increment_by};
-            """)
+                DO UPDATE SET metric_value = app_metrics.metric_value + excluded.metric_value;
+            """, [metric_name, increment_by])
             logger.debug(f"Incremented metric '{metric_name}' by {increment_by}")
         except Exception as e:
             logger.error(f"Error incrementing metric '{metric_name}': {e}")
@@ -507,3 +515,39 @@ class DuckDBClient:
         except Exception as e:
             logger.error(f"Error getting metric '{metric_name}': {e}")
             return default_value
+
+    def log_daily_visit(self):
+        """
+        Logs a visit for the current date.
+        If a record for today exists, increments the count. Otherwise, creates a new record.
+        """
+        from datetime import date
+        try:
+            today = date.today()
+            self.conn.execute("""
+                INSERT INTO daily_visits (visit_date, visit_count)
+                VALUES (?, 1)
+                ON CONFLICT (visit_date)
+                DO UPDATE SET visit_count = daily_visits.visit_count + 1;
+            """, [today])
+            logger.debug(f"Logged visit for date: {today}")
+        except Exception as e:
+            logger.error(f"Error logging daily visit: {e}")
+
+    def get_visits_last_30_days(self) -> int:
+        """
+        Calculates the total number of visits over the last 30 days.
+        """
+        from datetime import date, timedelta
+        try:
+            thirty_days_ago = date.today() - timedelta(days=30)
+            result = self.conn.execute("""
+                SELECT SUM(visit_count)
+                FROM daily_visits
+                WHERE visit_date >= ?
+            """, [thirty_days_ago]).fetchone()
+
+            return result[0] if result and result[0] is not None else 0
+        except Exception as e:
+            logger.error(f"Error getting visits from last 30 days: {e}")
+            return 0

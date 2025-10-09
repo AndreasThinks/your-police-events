@@ -11,9 +11,9 @@ def run_verification():
         # Wait for the stats element to be visible and contain the expected text
         stats_element = page.locator("#appStats")
         expect(stats_element).to_be_visible()
-        # The text will initially be "Loading stats..." and then update.
-        # We'll wait for it to contain "visitors", which indicates the API call was successful.
-        expect(stats_element).to_contain_text("visitors", timeout=10000) # Increased timeout for safety
+
+        # We'll wait for it to contain "visits (30 days)", which indicates the API call was successful.
+        expect(stats_element).to_contain_text("visits (30 days)", timeout=10000)
 
         # Take a screenshot of the footer to show the new stats
         footer_element = page.locator("footer")

@@ -276,6 +276,7 @@ async def root():
     # Increment visitor count (non-critical, so fire-and-forget)
     try:
         db_client.increment_metric("visitor_count")
+        db_client.log_daily_visit()
     except Exception as e:
         logger.warning(f"Could not increment visitor count: {e}")
 
@@ -607,10 +608,12 @@ async def get_app_stats():
     """
     visitor_count = db_client.get_metric("visitor_count", default_value=0)
     active_feeds = len(calendar_cache)
+    visits_last_30_days = db_client.get_visits_last_30_days()
 
     return {
         "visitor_count": visitor_count,
-        "active_feeds": active_feeds
+        "active_feeds": active_feeds,
+        "visits_last_30_days": visits_last_30_days
     }
 
 
