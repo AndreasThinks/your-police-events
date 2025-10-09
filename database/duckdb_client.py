@@ -110,6 +110,14 @@ class DuckDBClient:
             );
         """)
         
+        # Create app metrics table
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS app_metrics (
+                metric_name VARCHAR PRIMARY KEY,
+                metric_value BIGINT
+            );
+        """)
+
         logger.info("Database schema initialized")
     
     def insert_neighbourhood(
@@ -467,3 +475,35 @@ class DuckDBClient:
         except Exception as e:
             logger.error(f"Error getting force status: {e}")
             return None
+
+    def increment_metric(self, metric_name: str, increment_by: int = 1):
+        """
+        Increment a numeric metric in the app_metrics table.
+        If the metric doesn't exist, it's created with the increment value.
+        """
+        try:
+            self.conn.execute(f"""
+                INSERT INTO app_metrics (metric_name, metric_value)
+                VALUES ('{metric_name}', {increment_by})
+                ON CONFLICT (metric_name)
+                DO UPDATE SET metric_value = app_metrics.metric_value + {increment_by};
+            """)
+            logger.debug(f"Incremented metric '{metric_name}' by {increment_by}")
+        except Exception as e:
+            logger.error(f"Error incrementing metric '{metric_name}': {e}")
+            # Don't re-raise, as this is a non-critical operation
+
+    def get_metric(self, metric_name: str, default_value: int = 0) -> int:
+        """
+        Retrieve a numeric metric from the app_metrics table.
+        """
+        try:
+            result = self.conn.execute(
+                "SELECT metric_value FROM app_metrics WHERE metric_name = ?",
+                [metric_name]
+            ).fetchone()
+
+            return result[0] if result else default_value
+        except Exception as e:
+            logger.error(f"Error getting metric '{metric_name}': {e}")
+            return default_value

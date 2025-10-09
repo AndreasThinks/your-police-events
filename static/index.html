@@ -484,8 +484,14 @@
             padding-top: 12px;
             border-top: 1px solid rgba(255, 255, 255, 0.2);
         }
+
+        .footer-app-stats {
+            font-size: 12px;
+            opacity: 0.75;
+            margin-top: 10px;
+        }
         
-        .sync-icon {
+        .sync-icon, .stats-icon {
             display: inline-block;
             margin-right: 6px;
             opacity: 0.8;
@@ -647,6 +653,9 @@
             </div>
             <div class="footer-sync-status" id="syncStatus">
                 <span class="sync-icon">🔄</span>Loading sync status...
+            </div>
+            <div class="footer-app-stats" id="appStats">
+                <span class="stats-icon">📊</span>Loading stats...
             </div>
         </div>
     </footer>
@@ -981,6 +990,29 @@
         // Update sync status on page load and every 60 seconds
         updateSyncStatus();
         setInterval(updateSyncStatus, 60000);
+
+        // Fetch and display app stats
+        async function updateAppStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+
+                const statsEl = document.getElementById('appStats');
+
+                if (data.visitor_count !== undefined && data.active_feeds !== undefined) {
+                    statsEl.innerHTML = `<span class="stats-icon">📊</span>${data.visitor_count.toLocaleString()} visitors • ${data.active_feeds.toLocaleString()} active calendar feeds`;
+                } else {
+                    statsEl.textContent = '';
+                }
+            } catch (err) {
+                console.error('Failed to fetch app stats:', err);
+                document.getElementById('appStats').textContent = '';
+            }
+        }
+
+        // Update app stats on page load and every 30 seconds
+        updateAppStats();
+        setInterval(updateAppStats, 30000);
     </script>
 </body>
 </html>
