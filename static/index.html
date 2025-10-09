@@ -484,8 +484,18 @@
             padding-top: 12px;
             border-top: 1px solid rgba(255, 255, 255, 0.2);
         }
+
+        .footer-app-stats {
+            font-size: 12px;
+            opacity: 0.75;
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
         
-        .sync-icon {
+        .sync-icon, .stats-icon {
             display: inline-block;
             margin-right: 6px;
             opacity: 0.8;
@@ -647,6 +657,9 @@
             </div>
             <div class="footer-sync-status" id="syncStatus">
                 <span class="sync-icon">🔄</span>Loading sync status...
+            </div>
+            <div class="footer-app-stats" id="appStats">
+                <span class="stats-icon">📊</span>Loading stats...
             </div>
         </div>
     </footer>
@@ -981,6 +994,43 @@
         // Update sync status on page load and every 60 seconds
         updateSyncStatus();
         setInterval(updateSyncStatus, 60000);
+
+        // Fetch and display app stats
+        async function updateAppStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+
+                const statsEl = document.getElementById('appStats');
+                statsEl.innerHTML = ''; // Clear previous stats
+
+                if (data.visits_last_30_days !== undefined) {
+                    const monthlyVisitsEl = document.createElement('span');
+                    monthlyVisitsEl.innerHTML = `<span class="stats-icon">📈</span>${data.visits_last_30_days.toLocaleString()} visits (30 days)`;
+                    statsEl.appendChild(monthlyVisitsEl);
+                }
+
+                if (data.active_feeds !== undefined) {
+                    const activeFeedsEl = document.createElement('span');
+                    activeFeedsEl.innerHTML = `<span class="stats-icon">📡</span>${data.active_feeds.toLocaleString()} active feeds`;
+                    statsEl.appendChild(activeFeedsEl);
+                }
+
+                if (data.visitor_count !== undefined) {
+                    const totalVisitsEl = document.createElement('span');
+                    totalVisitsEl.innerHTML = `<span class="stats-icon">👥</span>${data.visitor_count.toLocaleString()} total visitors`;
+                    statsEl.appendChild(totalVisitsEl);
+                }
+
+            } catch (err) {
+                console.error('Failed to fetch app stats:', err);
+                document.getElementById('appStats').textContent = 'Stats unavailable';
+            }
+        }
+
+        // Update app stats on page load and every 30 seconds
+        updateAppStats();
+        setInterval(updateAppStats, 30000);
     </script>
 </body>
 </html>

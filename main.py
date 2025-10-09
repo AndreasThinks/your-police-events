@@ -273,6 +273,13 @@ class PostcodeLookupResponse(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve the main HTML page."""
+    # Increment visitor count (non-critical, so fire-and-forget)
+    try:
+        db_client.increment_metric("visitor_count")
+        db_client.log_daily_visit()
+    except Exception as e:
+        logger.warning(f"Could not increment visitor count: {e}")
+
     with open("static/index.html", "r") as f:
         return f.read()
 
@@ -591,6 +598,22 @@ async def get_sync_status():
     return {
         "last_updated": last_sync,
         "next_update": next_sync
+    }
+
+
+@app.get("/api/stats")
+async def get_app_stats():
+    """
+    Get application statistics like visitor count and active feeds.
+    """
+    visitor_count = db_client.get_metric("visitor_count", default_value=0)
+    active_feeds = len(calendar_cache)
+    visits_last_30_days = db_client.get_visits_last_30_days()
+
+    return {
+        "visitor_count": visitor_count,
+        "active_feeds": active_feeds,
+        "visits_last_30_days": visits_last_30_days
     }
 
 
